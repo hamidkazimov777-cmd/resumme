@@ -1,0 +1,232 @@
+// Resumee data model.
+// MVP: SQLite, single owner. Designed to migrate to PostgreSQL + multi-tenant SaaS.
+// Migration note: every domain table carries an ownerId. In MVP it is a fixed
+// constant ("owner"); when auth lands it becomes a User.id FK. No schema shape
+// changes are required for the SaaS jump beyond swapping provider + adding the
+// User table relations.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Profile (the central "Candidate Profile" aggregate)
+// ---------------------------------------------------------------------------
+
+model Profile {
+  id        String   @id @default(cuid())
+  ownerId   String   @unique @default("owner") // SaaS: -> User.id
+
+  // Personal
+  firstName   String?
+  lastName    String?
+  middleName  String?
+  birthDate   DateTime?
+  city        String?
+  country     String?
+
+  // Photo (stored on disk under /public/uploads, path recorded here)
+  photoPath   String?
+  photoWidth  Int?
+  photoHeight Int?
+
+  // Contacts
+  email       String?
+  phone       String?
+  telegram    String?
+  linkedin    String?
+  github       String?
+  website     String?
+  portfolio   String?
+
+  // Work preferences
+  workModes       String?  // JSON string[] e.g. ["remote","hybrid","office"]
+  relocation      Boolean  @default(false)
+  businessTrips   Boolean  @default(false)
+
+  // Relations
+  languages      Language[]
+  skills         Skill[]
+  experiences    Experience[]
+  educations     Education[]
+  certifications Certification[]
+  projects       Project[]
+
+  // AI Knowledge Profile (Candidate Intelligence Profile), 1:1
+  intelligence   IntelligenceProfile?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Language {
+  id        String  @id @default(cuid())
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name      String
+  level     String  // e.g. "Native", "C1", "B2"
+  order     Int     @default(0)
+
+  @@index([profileId])
+}
+
+model Skill {
+  id        String  @id @default(cuid())
+  profileId String
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  category  String  // technical | soft | management | tools | frameworks | languages
+  name      String
+  level     String? // optional proficiency label
+  order     Int     @default(0)
+
+  @@index([profileId])
+}
+
+model Experience {
+  id           String    @id @default(cuid())
+  profileId    String
+  profile      Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  company      String
+  companyUrl   String?
+  position     String
+  startDate    DateTime?
+  endDate      DateTime? // null = current
+  current      Boolean   @default(false)
+  location     String?
+  employment   String?   // full-time | part-time | contract | internship | freelance
+  responsibilities String? // JSON string[]
+  achievements String?     // JSON string[]
+  metrics      String?     // JSON string[] (quantified results)
+  order        Int       @default(0)
+
+  @@index([profileId])
+}
+
+model Education {
+  id          String    @id @default(cuid())
+  profileId   String
+  profile     Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  institution String
+  institutionUrl String?
+  degree      String?
+  field       String?
+  startYear   Int?
+  endYear     Int?
+  order       Int       @default(0)
+
+  @@index([profileId])
+}
+
+model Certification {
+  id           String    @id @default(cuid())
+  profileId    String
+  profile      Profile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name         String
+  organization String?
+  url          String?
+  credentialId String?
+  issueDate    DateTime?
+  order        Int       @default(0)
+
+  @@index([profileId])
+}
+
+model Project {
+  id           String   @id @default(cuid())
+  profileId    String
+  profile      Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  technologies String?  // JSON string[]
+  url          String?
+  results      String?  // JSON string[]
+  order        Int      @default(0)
+
+  @@index([profileId])
+}
+
+// Candidate Intelligence Profile — computed once by AI, reused by all generations.
+model IntelligenceProfile {
+  id        String  @id @default(cuid())
+  profileId String  @unique
+  profile   Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  // Full structured analysis stored as JSON.
+  data        String  // JSON: careerPath, strengths, competencies, level, industries, achievements, uniqueValue, directions
+  sourceHash  String  // hash of profile inputs used, to detect staleness
+  model       String? // model used to generate
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// AI provider settings
+// ---------------------------------------------------------------------------
+
+model ProviderSetting {
+  id        String  @id @default(cuid())
+  ownerId   String  @default("owner")
+  provider  String  // openrouter | tokenrouter | anthropic | moonshot
+  baseUrl   String
+  apiKey    String  // NOTE: MVP stores locally in SQLite. SaaS: encrypt at rest / KMS.
+  model     String? // selected model id
+  isActive  Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ownerId, provider])
+}
+
+// ---------------------------------------------------------------------------
+// Job analysis + generations
+// ---------------------------------------------------------------------------
+
+model Job {
+  id         String  @id @default(cuid())
+  ownerId    String  @default("owner")
+  sourceUrl  String?
+  rawText    String  // pasted or fetched job description
+
+  // Analysis result
+  title      String?
+  company    String?
+  market     String? // USA | Canada | Germany | UK | UAE | Russia | ...
+  countryLang String? // detected language of the vacancy
+  seniority  String? // junior | middle | senior | lead | head | director | vp | c-level
+  analysis   String? // JSON: atsRequirements, keywords, responsibilities, requirements, matchScore, strong, weak, gaps
+  matchScore Int?
+
+  generations Generation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+}
+
+model Generation {
+  id        String  @id @default(cuid())
+  ownerId   String  @default("owner")
+  jobId     String
+  job       Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  kind      String  // resume | cover_letter
+  language  String?
+  format    String  @default("A4") // A4 | Letter
+  model     String?
+
+  content   String  // JSON structured document (ATS resume model or cover letter model)
+  version   Int     @default(1)
+
+  createdAt DateTime @default(now())
+
+  @@index([jobId])
+  @@index([ownerId, kind])
+}
