@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { analyzeJob } from "@/server/ai";
+import { fetchPublicText } from "@/server/safe-fetch";
 import { currentUserId, unauthorized } from "@/server/auth";
 import { RateLimitError } from "@/server/ratelimit";
 
@@ -11,13 +12,13 @@ const schema = z.object({
 
 // Best-effort fetch + strip of a job posting URL. Many boards block bots, so
 // pasting text is the reliable path; this is a convenience fallback.
+//
+// The URL comes from the caller, so the request goes through fetchPublicText,
+// which allows only public http(s) hosts. Fetching it directly would let anyone
+// with an account read cloud metadata or services on the private network and
+// get the contents back in the analysis.
 async function fetchJobText(url: string): Promise<string> {
-  const res = await fetch(url, {
-    headers: { "user-agent": "Mozilla/5.0 (compatible; Resumee/1.0)" },
-    redirect: "follow",
-  });
-  if (!res.ok) throw new Error(`Fetch failed (${res.status}).`);
-  const html = await res.text();
+  const html = await fetchPublicText(url);
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
