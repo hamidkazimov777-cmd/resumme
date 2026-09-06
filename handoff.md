@@ -22,10 +22,11 @@ Then: **Settings** → add a provider API key → **Load models** → pick a mod
 - [x] ATS-friendly PDF export (A4 / Letter), real text, single column.
 - [x] Photo upload with type/size/aspect-ratio validation.
 - [x] Dashboard, Profile, Settings, Analyzer, Job detail, History pages.
+- [x] Design skill: 3 auto-selected resume templates (ats / modern / photo), instant template switching, photo embedded for photo-expecting markets.
 - [x] `next build` green.
 
 ## Open tasks
-- [ ] Photo embedding into the resume PDF for markets that expect it (currently `includePhoto` is computed but the image is not yet drawn into the PDF).
+- [ ] Persist a user's manual template override (currently `?template=` preview only; auto choice is what's stored).
 - [ ] Job detail: render the raw generated document as an on-page preview (currently PDF-only via `/api/pdf/[id]`).
 - [ ] Delete/manage generations & jobs from the UI (API `DELETE /api/jobs/[id]` exists; no UI button yet).
 - [ ] Loading/skeleton states + toasts (using inline badges for now).

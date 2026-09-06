@@ -9,6 +9,7 @@ import {
   coverLetterPrompt,
 } from "@/lib/prompts/tasks";
 import { serializeProfile, getOrCreateProfile, type FullProfile } from "./profile";
+import { selectTemplate } from "@/lib/design/templates";
 import type { IntelligenceData, JobAnalysis, ResumeDoc, CoverLetterDoc } from "@/lib/types";
 
 // Resolve the active provider config, or throw a clear error.
@@ -112,6 +113,16 @@ export async function generate(
   const content =
     kind === "resume" ? parseJson<ResumeDoc>(text) : parseJson<CoverLetterDoc>(text);
 
+  // Design skill: auto-select a visual template from market/role/photo signals.
+  const includePhoto = kind === "resume" ? (content as ResumeDoc).includePhoto : false;
+  const template = selectTemplate({
+    market: analysis.market,
+    seniority: analysis.seniority,
+    title: analysis.title,
+    includePhoto,
+    hasPhotoFile: !!profile.photoPath,
+  });
+
   // Version = count of existing generations of this kind for this job + 1.
   const prior = await prisma.generation.count({ where: { jobId, kind } });
   const gen = await prisma.generation.create({
@@ -121,6 +132,7 @@ export async function generate(
       kind,
       language,
       format,
+      template,
       model,
       content: JSON.stringify(content),
       version: prior + 1,

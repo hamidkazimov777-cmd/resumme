@@ -9,3 +9,6 @@ out
 /public/uploads/*
 !/public/uploads/.gitkeep
 .DS_Store
+
+# build info
+*.tsbuildinfo

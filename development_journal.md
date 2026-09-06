@@ -4,6 +4,35 @@ Reverse-chronological. Every change appends an entry: what, files, why, next.
 
 ---
 
+## 2026-09-05 — Design skill: auto-selected resume templates
+
+**What** — Added a design engine with 3 visual templates and automatic selection.
+Switching a template is pure layout (re-renders stored content, no AI call).
+
+**Templates** — `ats` (B/W, safest for US/UK ATS), `modern` (accent color, header bar
+— product/startup/creative), `photo` (portrait top-right — DACH/Gulf/CIS).
+
+**Auto-selection** (`selectTemplate`) — photo-expecting market + a real photo on file →
+`photo`; conservative market (US/UK/CA) or exec seniority → `ats`; creative/product/
+startup signals in title/industries → `modern`; else `ats`.
+
+**Files**
+- `src/lib/design/templates.ts` — theme registry + `selectTemplate` + `getTheme`.
+- `src/lib/pdf/documents.tsx` — theme-driven styles (accent name/section titles, header
+  bar, optional embedded photo); header flex fixed so contacts wrap beside the photo.
+- `src/server/ai.ts` — `generate()` computes and stores the template per generation.
+- `src/app/api/pdf/[id]/route.ts` — uses stored template or `?template=` override; loads
+  the candidate photo as a data URI for the photo template.
+- `prisma/schema.prisma` — `Generation.template String?` (db push).
+- `src/components/generation-studio.tsx` + `analyzer/[id]/page.tsx` — per-generation
+  template chips (marks the auto pick), open/download in any template instantly.
+
+**Verified** — all three render for the real Block Labs resume: ats & modern one page,
+photo one page with the portrait embedded and contacts wrapping cleanly (QuickLook).
+`next build` green.
+
+---
+
 ## 2026-09-05 — Resume PDF: one-page + no empty gaps
 
 **What** — (1) A big blank appeared at the bottom of page 1 because each Experience

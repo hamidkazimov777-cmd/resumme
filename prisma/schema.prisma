@@ -220,6 +220,7 @@ model Generation {
   kind      String  // resume | cover_letter
   language  String?
   format    String  @default("A4") // A4 | Letter
+  template  String? // design template id (auto-selected; ats | modern | photo)
   model     String?
 
   content   String  // JSON structured document (ATS resume model or cover letter model)

@@ -70,7 +70,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
 
       <GenerationStudio
         jobId={job.id}
-        generations={job.generations.map((g) => ({ id: g.id, kind: g.kind, version: g.version, format: g.format, createdAt: g.createdAt.toISOString() }))}
+        generations={job.generations.map((g) => ({ id: g.id, kind: g.kind, version: g.version, format: g.format, template: g.template, createdAt: g.createdAt.toISOString() }))}
       />
     </div>
   );

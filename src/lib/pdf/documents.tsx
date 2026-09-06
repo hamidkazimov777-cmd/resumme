@@ -1,44 +1,56 @@
 import React from "react";
-import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
+import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
 import type { ResumeDoc, CoverLetterDoc } from "@/lib/types";
+import { getTheme, type Theme } from "@/lib/design/templates";
 
 // ATS-friendly layout: single linear column, standard headings, real text,
-// simple "-" bullets, no tables/graphics. Selectable + machine-parseable.
+// simple "-" bullets, no tables/graphics. A "template" is a THEME (accent
+// color + header layout + optional photo) applied over this same structure —
+// parsing stays intact regardless of template.
 
 const PAGE_SIZE = { A4: "A4", Letter: "LETTER" } as const;
 
-const s = StyleSheet.create({
-  page: { paddingVertical: 30, paddingHorizontal: 40, fontSize: 9.4, lineHeight: 1.3, color: "#111", fontFamily: "Helvetica" },
-  name: { fontSize: 18, fontFamily: "Helvetica-Bold", lineHeight: 1.15, marginBottom: 3 },
-  headline: { fontSize: 10.5, color: "#333", marginBottom: 5 },
-  contactRow: { fontSize: 8.5, color: "#444", marginBottom: 7 },
-  sectionTitle: { fontSize: 10, fontFamily: "Helvetica-Bold", textTransform: "uppercase", letterSpacing: 1, marginTop: 8, marginBottom: 3, borderBottom: "1px solid #ccc", paddingBottom: 2 },
-  summary: { marginBottom: 2 },
-  itemHeader: { flexDirection: "row", justifyContent: "space-between", marginTop: 5 },
-  itemTitle: { fontFamily: "Helvetica-Bold", fontSize: 10 },
-  itemSub: { fontSize: 9, color: "#555" },
-  itemDates: { fontSize: 9, color: "#555" },
-  bullet: { flexDirection: "row", marginTop: 2, paddingLeft: 4 },
-  bulletDot: { width: 10 },
-  bulletText: { flex: 1 },
-  skillLine: { marginTop: 2 },
-  para: { marginBottom: 8 },
-});
+// Styles depend on the theme's accent, so build them per-render.
+function makeStyles(theme: Theme) {
+  const titleColor = theme.headerStyle === "plain" ? "#111" : theme.accent;
+  return StyleSheet.create({
+    page: { paddingVertical: 30, paddingHorizontal: 40, fontSize: 9.4, lineHeight: 1.3, color: "#111", fontFamily: "Helvetica" },
+    headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 14 },
+    headerMain: { flexGrow: 1, flexShrink: 1, flexBasis: 0 },
+    accentBar: { height: 3, backgroundColor: theme.accent, marginBottom: 8, marginTop: 2 },
+    name: { fontSize: 18, fontFamily: "Helvetica-Bold", lineHeight: 1.15, marginBottom: 3, color: theme.headerStyle === "plain" ? "#111" : theme.accent },
+    headline: { fontSize: 10.5, color: "#333", marginBottom: 5 },
+    contactRow: { fontSize: 8.5, color: "#444", marginBottom: 7 },
+    photo: { width: 60, height: 80, objectFit: "cover", borderRadius: 2, flexShrink: 0 },
+    sectionTitle: {
+      fontSize: 10, fontFamily: "Helvetica-Bold", textTransform: "uppercase", letterSpacing: 1,
+      marginTop: 8, marginBottom: 3, color: titleColor,
+      ...(theme.rule ? { borderBottom: `1px solid ${theme.headerStyle === "plain" ? "#ccc" : theme.accent}`, paddingBottom: 2 } : {}),
+    },
+    summary: { marginBottom: 2 },
+    itemHeader: { flexDirection: "row", justifyContent: "space-between", marginTop: 5 },
+    itemTitle: { fontFamily: "Helvetica-Bold", fontSize: 10 },
+    itemSub: { fontSize: 9, color: "#555" },
+    itemDates: { fontSize: 9, color: "#555" },
+    bullet: { flexDirection: "row", marginTop: 2, paddingLeft: 4 },
+    bulletDot: { width: 10 },
+    bulletText: { flex: 1 },
+    skillLine: { marginTop: 2 },
+    para: { marginBottom: 8 },
+  });
+}
 
-// Drop the scheme so long URLs read cleanly and don't dominate the header.
 function cleanContact(v: string): string {
   return v.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
 }
 
-function Contacts({ items }: { items: { label: string; value: string }[] }) {
-  return (
-    <Text style={s.contactRow}>
-      {items.map((c) => cleanContact(c.value)).filter(Boolean).join("  ·  ")}
-    </Text>
-  );
+type StyleObj = ReturnType<typeof makeStyles>[keyof ReturnType<typeof makeStyles>];
+
+function Contacts({ items, style }: { items: { label: string; value: string }[]; style: StyleObj }) {
+  return <Text style={style}>{items.map((c) => cleanContact(c.value)).filter(Boolean).join("  ·  ")}</Text>;
 }
 
-function Bullets({ items }: { items: string[] }) {
+function Bullets({ items, s }: { items: string[]; s: ReturnType<typeof makeStyles> }) {
   return (
     <>
       {items.filter(Boolean).map((b, i) => (
@@ -51,13 +63,37 @@ function Bullets({ items }: { items: string[] }) {
   );
 }
 
-export function ResumePDF({ doc, format }: { doc: ResumeDoc; format: "A4" | "Letter" }) {
+export function ResumePDF({
+  doc,
+  format,
+  template,
+  photoSrc,
+}: {
+  doc: ResumeDoc;
+  format: "A4" | "Letter";
+  template?: string | null;
+  photoSrc?: string;
+}) {
+  const theme = getTheme(template);
+  const s = makeStyles(theme);
+  const showPhoto = theme.showPhoto && !!photoSrc;
+
+  const header = (
+    <View style={s.headerRow}>
+      <View style={s.headerMain}>
+        <Text style={s.name}>{doc.fullName}</Text>
+        {doc.headline ? <Text style={s.headline}>{doc.headline}</Text> : null}
+        <Contacts style={s.contactRow} items={[...(doc.location ? [{ label: "loc", value: doc.location }] : []), ...doc.contacts]} />
+      </View>
+      {showPhoto ? <Image style={s.photo} src={photoSrc!} /> : null}
+    </View>
+  );
+
   return (
     <Document title={`${doc.fullName} — Resume`} author={doc.fullName}>
       <Page size={PAGE_SIZE[format]} style={s.page}>
-        <Text style={s.name}>{doc.fullName}</Text>
-        {doc.headline ? <Text style={s.headline}>{doc.headline}</Text> : null}
-        <Contacts items={[...(doc.location ? [{ label: "loc", value: doc.location }] : []), ...doc.contacts]} />
+        {header}
+        {theme.headerStyle === "bar" ? <View style={s.accentBar} /> : null}
 
         {doc.summary ? (
           <View>
@@ -82,9 +118,6 @@ export function ResumePDF({ doc, format }: { doc: ResumeDoc; format: "A4" | "Let
           <View>
             <Text style={s.sectionTitle}>Experience</Text>
             {doc.experience.map((e, i) => (
-              // Allow the block to break across pages (fills the page instead of
-              // leaving a gap), but keep the header + first line together and
-              // never orphan a header at the very bottom of a page.
               <View key={i}>
                 <View wrap={false} minPresenceAhead={36}>
                   <View style={s.itemHeader}>
@@ -96,7 +129,7 @@ export function ResumePDF({ doc, format }: { doc: ResumeDoc; format: "A4" | "Let
                   </View>
                   {e.location ? <Text style={s.itemSub}>{e.location}</Text> : null}
                 </View>
-                <Bullets items={e.bullets ?? []} />
+                <Bullets items={e.bullets ?? []} s={s} />
               </View>
             ))}
           </View>
@@ -106,9 +139,6 @@ export function ResumePDF({ doc, format }: { doc: ResumeDoc; format: "A4" | "Let
           <View>
             <Text style={s.sectionTitle}>Projects</Text>
             {doc.projects.map((p, i) => (
-              // Compact: name + description on one flow, tech folded into a
-              // single trailing line. URL omitted here (links live in contacts)
-              // to keep the resume to a single page.
               <View key={i} wrap={false} style={{ marginTop: 3 }}>
                 <Text>
                   <Text style={s.itemTitle}>{p.name}</Text>
@@ -160,12 +190,23 @@ export function ResumePDF({ doc, format }: { doc: ResumeDoc; format: "A4" | "Let
   );
 }
 
-export function CoverLetterPDF({ doc, format }: { doc: CoverLetterDoc; format: "A4" | "Letter" }) {
+export function CoverLetterPDF({
+  doc,
+  format,
+  template,
+}: {
+  doc: CoverLetterDoc;
+  format: "A4" | "Letter";
+  template?: string | null;
+}) {
+  const theme = getTheme(template);
+  const s = makeStyles(theme);
   return (
     <Document title={`${doc.fullName} — Cover Letter`} author={doc.fullName}>
       <Page size={PAGE_SIZE[format]} style={s.page}>
         <Text style={s.name}>{doc.fullName}</Text>
-        <Contacts items={doc.contacts ?? []} />
+        <Contacts style={s.contactRow} items={doc.contacts ?? []} />
+        {theme.headerStyle === "bar" ? <View style={s.accentBar} /> : null}
         {doc.date ? <Text style={s.para}>{doc.date}</Text> : null}
         {doc.recipient ? <Text style={s.para}>{doc.recipient}</Text> : null}
         <Text style={s.para}>{doc.greeting}</Text>
