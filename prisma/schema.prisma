@@ -1,9 +1,11 @@
 // Resumee data model.
-// MVP: SQLite, single owner. Designed to migrate to PostgreSQL + multi-tenant SaaS.
-// Migration note: every domain table carries an ownerId. In MVP it is a fixed
-// constant ("owner"); when auth lands it becomes a User.id FK. No schema shape
-// changes are required for the SaaS jump beyond swapping provider + adding the
-// User table relations.
+// Multi-tenant: every domain row carries `ownerId` = User.id. Auth is built-in
+// (email + password + DB sessions). API keys are encrypted at rest.
+//
+// Postgres migration: switch `provider` to "postgresql" and set DATABASE_URL.
+// `ownerId` columns can then be promoted to hard FKs to User; today they are
+// plain user-id strings enforced in application code (keeps SQLite migrations
+// additive and portable). Array columns stay JSON strings for portability.
 
 generator client {
   provider = "prisma-client-js"
@@ -15,12 +17,49 @@ datasource db {
 }
 
 // ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String?
+  sessions     Session[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Session {
+  id        String   @id @default(cuid()) // opaque token stored in the cookie
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Fixed-window rate limiting per user + action. Portable to Postgres; swap for
+// Redis at multi-instance scale.
+model RateLimit {
+  id          String   @id @default(cuid())
+  ownerId     String
+  action      String
+  windowStart DateTime
+  count       Int      @default(0)
+
+  @@unique([ownerId, action, windowStart])
+  @@index([ownerId, action])
+}
+
+// ---------------------------------------------------------------------------
 // Profile (the central "Candidate Profile" aggregate)
 // ---------------------------------------------------------------------------
 
 model Profile {
   id        String   @id @default(cuid())
-  ownerId   String   @unique @default("owner") // SaaS: -> User.id
+  ownerId   String   @unique // = User.id (one profile per user)
 
   // Personal
   firstName   String?
@@ -171,10 +210,10 @@ model IntelligenceProfile {
 
 model ProviderSetting {
   id        String  @id @default(cuid())
-  ownerId   String  @default("owner")
+  ownerId   String  // = User.id
   provider  String  // openrouter | tokenrouter | anthropic | moonshot
   baseUrl   String
-  apiKey    String  // NOTE: MVP stores locally in SQLite. SaaS: encrypt at rest / KMS.
+  apiKey    String  // encrypted at rest (AES-256-GCM, "v1:" prefix); legacy plaintext tolerated on read
   model     String? // selected model id
   isActive  Boolean @default(false)
 
@@ -190,7 +229,7 @@ model ProviderSetting {
 
 model Job {
   id         String  @id @default(cuid())
-  ownerId    String  @default("owner")
+  ownerId    String  // = User.id
   sourceUrl  String?
   rawText    String  // pasted or fetched job description
 
@@ -213,7 +252,7 @@ model Job {
 
 model Generation {
   id        String  @id @default(cuid())
-  ownerId   String  @default("owner")
+  ownerId   String  // = User.id
   jobId     String
   job       Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
 

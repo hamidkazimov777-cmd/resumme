@@ -1,19 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { OWNER_ID, PROVIDERS } from "@/lib/constants";
+import { PROVIDERS } from "@/lib/constants";
+import { encryptSecret, decryptSecret, maskSecret } from "@/lib/crypto";
+import { currentUserId, unauthorized } from "@/server/auth";
 
 export async function GET() {
-  const settings = await prisma.providerSetting.findMany({ where: { ownerId: OWNER_ID } });
-  // Never leak full keys to the client; return a masked hint + presence flag.
-  const safe = settings.map((s) => ({
-    provider: s.provider,
-    baseUrl: s.baseUrl,
-    model: s.model,
-    isActive: s.isActive,
-    hasKey: !!s.apiKey,
-    keyHint: s.apiKey ? `••••${s.apiKey.slice(-4)}` : "",
-  }));
+  const userId = await currentUserId();
+  if (!userId) return unauthorized();
+  const settings = await prisma.providerSetting.findMany({ where: { ownerId: userId } });
+  // Never return the key; expose only presence + a masked hint (decrypt to mask).
+  const safe = settings.map((s) => {
+    let keyHint = "";
+    if (s.apiKey) {
+      try {
+        keyHint = maskSecret(decryptSecret(s.apiKey));
+      } catch {
+        keyHint = "••••";
+      }
+    }
+    return { provider: s.provider, baseUrl: s.baseUrl, model: s.model, isActive: s.isActive, hasKey: !!s.apiKey, keyHint };
+  });
   return NextResponse.json(safe);
 }
 
@@ -25,28 +32,26 @@ const schema = z.object({
 });
 
 export async function PUT(req: NextRequest) {
+  const userId = await currentUserId();
+  if (!userId) return unauthorized();
   const parsed = schema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   const { provider, apiKey, model, isActive } = parsed.data;
   const baseUrl = PROVIDERS[provider].baseUrl;
 
-  const existing = await prisma.providerSetting.findUnique({
-    where: { ownerId_provider: { ownerId: OWNER_ID, provider } },
-  });
-
   const setting = await prisma.providerSetting.upsert({
-    where: { ownerId_provider: { ownerId: OWNER_ID, provider } },
+    where: { ownerId_provider: { ownerId: userId, provider } },
     create: {
-      ownerId: OWNER_ID,
+      ownerId: userId,
       provider,
       baseUrl,
-      apiKey: apiKey ?? "",
+      apiKey: apiKey ? encryptSecret(apiKey) : "",
       model: model ?? null,
       isActive: isActive ?? false,
     },
     update: {
       baseUrl,
-      ...(apiKey !== undefined ? { apiKey } : {}),
+      ...(apiKey !== undefined ? { apiKey: apiKey ? encryptSecret(apiKey) : "" } : {}),
       ...(model !== undefined ? { model } : {}),
       ...(isActive !== undefined ? { isActive } : {}),
     },
@@ -55,7 +60,7 @@ export async function PUT(req: NextRequest) {
   // Only one active provider at a time.
   if (isActive) {
     await prisma.providerSetting.updateMany({
-      where: { ownerId: OWNER_ID, provider: { not: provider } },
+      where: { ownerId: userId, provider: { not: provider } },
       data: { isActive: false },
     });
   }

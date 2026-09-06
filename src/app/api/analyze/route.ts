@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { analyzeJob } from "@/server/ai";
+import { currentUserId, unauthorized } from "@/server/auth";
+import { RateLimitError } from "@/server/ratelimit";
 
 const schema = z.object({
   sourceUrl: z.string().url().optional(),
@@ -27,6 +29,8 @@ async function fetchJobText(url: string): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
+  const userId = await currentUserId();
+  if (!userId) return unauthorized();
   const parsed = schema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   let { rawText } = parsed.data;
@@ -42,9 +46,12 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const { job, analysis } = await analyzeJob({ sourceUrl, rawText });
+    const { job, analysis } = await analyzeJob(userId, { sourceUrl, rawText });
     return NextResponse.json({ jobId: job.id, analysis });
   } catch (e) {
+    if (e instanceof RateLimitError) {
+      return NextResponse.json({ error: "Too many analyses this hour. Try again later." }, { status: 429 });
+    }
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
 }

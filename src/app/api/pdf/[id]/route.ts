@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { ResumePDF, CoverLetterPDF } from "@/lib/pdf/documents";
 import { getTheme } from "@/lib/design/templates";
 import { getOrCreateProfile } from "@/server/profile";
+import { currentUserId, unauthorized } from "@/server/auth";
 import type { ResumeDoc, CoverLetterDoc } from "@/lib/types";
 
 // Load the candidate photo as a data URI so react-pdf can embed it (CSP/file
@@ -24,8 +25,10 @@ async function loadPhotoDataUri(photoPath: string): Promise<string | undefined> 
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const userId = await currentUserId();
+  if (!userId) return unauthorized();
   const { id } = await params;
-  const gen = await prisma.generation.findUnique({ where: { id } });
+  const gen = await prisma.generation.findFirst({ where: { id, ownerId: userId } });
   if (!gen) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const format = (gen.format === "Letter" ? "Letter" : "A4") as "A4" | "Letter";
@@ -39,7 +42,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (gen.kind === "resume") {
     let photoSrc: string | undefined;
     if (getTheme(template).showPhoto) {
-      const profile = await getOrCreateProfile();
+      const profile = await getOrCreateProfile(userId);
       if (profile.photoPath) photoSrc = await loadPhotoDataUri(profile.photoPath);
     }
     element = React.createElement(ResumePDF, { doc: content as ResumeDoc, format, template, photoSrc });

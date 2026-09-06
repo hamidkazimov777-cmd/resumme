@@ -4,6 +4,46 @@ Reverse-chronological. Every change appends an entry: what, files, why, next.
 
 ---
 
+## 2026-09-05 — P0: auth + multi-tenant, encrypted keys, rate limiting
+
+**What** — Turned the single-owner MVP into a real multi-user service (still local,
+Postgres-ready).
+
+- **Auth** (built-in, no heavy deps): `User` + `Session` tables; bcrypt password
+  hashing; opaque DB session token in an httpOnly cookie (30d). Routes
+  `/api/auth/{register,login,logout,me}`; `/login` + `/register` pages; `middleware.ts`
+  gates every route (redirect pages → /login, APIs → 401) on cookie presence, with
+  real validation in handlers. Sidebar shows the user + Sign out, hidden on auth pages.
+- **Multi-tenant** — dropped the `OWNER_ID="owner"` constant; every server fn and route
+  now resolves the session user and scopes all reads/writes by `ownerId = user.id`.
+  First registered user adopts any legacy `ownerId="owner"` rows (profile / provider /
+  jobs / generations) so existing local data carries into the account.
+- **Encrypted API keys** — `src/lib/crypto.ts` AES-256-GCM ("v1:" format) via
+  `APP_ENCRYPTION_KEY`; keys encrypted on save, decrypted on use; legacy plaintext
+  tolerated on read and upgraded on next save. Settings only ever returns a masked hint.
+- **Rate limiting** — `RateLimit` table + `enforceRateLimit` (fixed window per user+action:
+  analyze 40/h, generate 60/h, intelligence 20/h) → 429 with a friendly message.
+
+**Files** — `prisma/schema.prisma` (User/Session/RateLimit; ownerId defaults dropped),
+`src/lib/auth/{password,session}.ts`, `src/server/{auth,ratelimit}.ts`, `src/lib/crypto.ts`,
+`src/middleware.ts`, `src/app/api/auth/**`, `src/app/{login,register}/page.tsx`,
+`src/components/{auth-form,sidebar}.tsx`, and userId threading through
+`src/server/{profile,ai}.ts` + every API route + server page. `.env`/`.env.example`
+gained `APP_ENCRYPTION_KEY` + `AUTH_SECRET`.
+
+**Decisions** (user-picked) — SQLite locally + Postgres-ready (flip datasource + URL at
+deploy); built-in email+password auth (portable, no framework).
+
+**Verified** — `next build` green (19 routes). Live: unauth `/` → 307 /login, `/login`
+200, `/api/profile` 401; register → cookie, and legacy data migrated to the account
+(47 skills, 4 projects), provider key decrypted + masked correctly. Test account then
+removed and data reassigned back to `owner` so first real registration inherits it.
+
+**Note** — DB session validation can't run in edge middleware (Prisma), so middleware
+checks cookie presence only; handlers/server components do the real check.
+
+---
+
 ## 2026-09-05 — Design skill: auto-selected resume templates
 
 **What** — Added a design engine with 3 visual templates and automatic selection.

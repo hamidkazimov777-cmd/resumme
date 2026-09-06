@@ -1,5 +1,4 @@
 import { prisma } from "@/lib/db";
-import { OWNER_ID } from "@/lib/constants";
 import { parseArray } from "@/lib/utils";
 import type { Prisma } from "@prisma/client";
 
@@ -15,21 +14,18 @@ const include = {
 
 export type FullProfile = Prisma.ProfileGetPayload<{ include: typeof include }>;
 
-/** Get the single owner profile, creating an empty one if absent.
- * Uses upsert so concurrent first-hit requests don't race on the unique ownerId. */
-export async function getOrCreateProfile(): Promise<FullProfile> {
-  const existing = await prisma.profile.findUnique({
-    where: { ownerId: OWNER_ID },
-    include,
-  });
+/** Get the user's profile, creating an empty one if absent.
+ * Catches the unique-ownerId race so concurrent first-hits don't fail. */
+export async function getOrCreateProfile(ownerId: string): Promise<FullProfile> {
+  const existing = await prisma.profile.findUnique({ where: { ownerId }, include });
   if (existing) return existing;
   try {
-    await prisma.profile.create({ data: { ownerId: OWNER_ID } });
+    await prisma.profile.create({ data: { ownerId } });
   } catch (e) {
     // A concurrent request created it first (unique ownerId) — safe to ignore.
     if (!(e && typeof e === "object" && (e as { code?: string }).code === "P2002")) throw e;
   }
-  return prisma.profile.findUniqueOrThrow({ where: { ownerId: OWNER_ID }, include });
+  return prisma.profile.findUniqueOrThrow({ where: { ownerId }, include });
 }
 
 /** Compact, AI-friendly serialization of a profile (drops empty fields). */

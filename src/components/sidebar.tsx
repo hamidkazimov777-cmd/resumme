@@ -1,7 +1,8 @@
 "use client";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { LayoutDashboard, User, Briefcase, History, Settings, FileText } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { LayoutDashboard, User, Briefcase, History, Settings, FileText, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -12,8 +13,28 @@ const NAV = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
+const HIDDEN_ON = ["/login", "/register"];
+
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [email, setEmail] = useState<string | null>(null);
+
+  const hidden = HIDDEN_ON.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+
+  useEffect(() => {
+    if (hidden) return;
+    fetch("/api/auth/me").then((r) => r.json()).then((d) => setEmail(d.user?.email ?? null)).catch(() => {});
+  }, [hidden, pathname]);
+
+  if (hidden) return null;
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  }
+
   return (
     <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r border-border bg-surface">
       <div className="flex h-14 items-center gap-2 px-5">
@@ -29,9 +50,7 @@ export function Sidebar() {
               href={href}
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                active
-                  ? "bg-card font-medium text-foreground shadow-sm"
-                  : "text-muted hover:text-foreground"
+                active ? "bg-card font-medium text-foreground shadow-sm" : "text-muted hover:text-foreground"
               )}
             >
               <Icon className="size-4" />
@@ -40,8 +59,11 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <div className="mt-auto p-4 text-xs text-muted">
-        <p>Local MVP · single owner</p>
+      <div className="mt-auto flex flex-col gap-2 p-4">
+        {email ? <p className="truncate text-xs text-muted" title={email}>{email}</p> : null}
+        <button onClick={logout} className="flex items-center gap-2 rounded-md px-1 py-1 text-xs text-muted transition-colors hover:text-foreground">
+          <LogOut className="size-3.5" /> Sign out
+        </button>
       </div>
     </aside>
   );

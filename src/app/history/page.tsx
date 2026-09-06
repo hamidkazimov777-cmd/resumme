@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { OWNER_ID } from "@/lib/constants";
+import { getSessionUser } from "@/server/auth";
 import { Card, CardContent, CardHeader, CardTitle, Badge } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { fmtDate } from "@/lib/utils";
@@ -9,8 +10,10 @@ import { Download, FileText, Mail } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function HistoryPage() {
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
   const generations = await prisma.generation.findMany({
-    where: { ownerId: OWNER_ID },
+    where: { ownerId: user.id },
     orderBy: { createdAt: "desc" },
     include: { job: true },
   });

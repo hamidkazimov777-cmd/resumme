@@ -1,7 +1,3 @@
-// Single-owner MVP identity. When auth/SaaS lands, replace usages with the
-// authenticated user id resolved from the session.
-export const OWNER_ID = "owner";
-
 export type ProviderId = "openrouter" | "tokenrouter" | "anthropic" | "moonshot";
 
 export interface ProviderDef {

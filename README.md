@@ -32,6 +32,7 @@ seniority-aware resume + cover letter, exported to clean PDF.
 - Hidden **master prompt system** — ATS rules, resume/cover-letter craft, recruiter expectations, per-country conventions.
 - **ATS-friendly PDF** — real text, single linear column, no tables/graphics.
 - One-page-first layout, photo validation, operation history.
+- Multi-user accounts (email + password), **encrypted API keys** at rest, per-user rate limiting.
 
 ## Quick start
 
@@ -42,15 +43,18 @@ git clone https://github.com/hamidkazimov777-cmd/resumme.git
 cd resumme
 npm install
 cp .env.example .env
+# set APP_ENCRYPTION_KEY (and AUTH_SECRET) — generate each with:
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 npm run db:push        # creates the local SQLite database
 npm run dev            # http://localhost:3000
 ```
 
 Then in the app:
 
-1. **Settings** → paste a provider API key → **Load models** → pick one → **Set active**.
-2. **Candidate Profile** → fill in → **Save** → run **Intelligence**.
-3. **Job Analyzer** → paste a vacancy → **Generate** → open / download the PDF.
+1. **Register** an account (email + password).
+2. **Settings** → paste a provider API key → **Load models** → pick one → **Set active**.
+3. **Candidate Profile** → fill in → **Save** → run **Intelligence**.
+4. **Job Analyzer** → paste a vacancy → **Generate** → open / download the PDF.
 
 ## Tech stack
 
@@ -69,8 +73,8 @@ src/app/           pages   ·   src/components/   UI
 
 ## Notes
 
-- **MVP:** runs locally, single user, no auth/payments. Architected to migrate to PostgreSQL + multi-tenant SaaS (`ownerId` on every table).
-- Your data stays local: profile, generations and API keys live in `prisma/dev.db`; the DB, uploads and `.env` are git-ignored.
+- **Multi-user & self-hostable.** Built-in email+password auth with DB sessions; all data scoped per account. Runs locally on SQLite; Postgres-ready — flip `datasource.provider` to `postgresql` and set `DATABASE_URL` to deploy. No payments yet.
+- Your data stays local: profiles, generations and (encrypted) API keys live in `prisma/dev.db`; the DB, uploads and `.env` are git-ignored.
 
 ## License
 

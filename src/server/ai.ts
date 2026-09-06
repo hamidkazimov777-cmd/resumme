@@ -1,7 +1,8 @@
 import { createHash } from "crypto";
 import { prisma } from "@/lib/db";
-import { OWNER_ID, type ProviderId } from "@/lib/constants";
+import { type ProviderId } from "@/lib/constants";
 import { chat, parseJson } from "@/lib/ai/client";
+import { decryptSecret } from "@/lib/crypto";
 import {
   intelligencePrompt,
   jobAnalysisPrompt,
@@ -9,13 +10,14 @@ import {
   coverLetterPrompt,
 } from "@/lib/prompts/tasks";
 import { serializeProfile, getOrCreateProfile, type FullProfile } from "./profile";
+import { enforceRateLimit } from "./ratelimit";
 import { selectTemplate } from "@/lib/design/templates";
 import type { IntelligenceData, JobAnalysis, ResumeDoc, CoverLetterDoc } from "@/lib/types";
 
-// Resolve the active provider config, or throw a clear error.
-export async function getActiveProvider() {
+// Resolve the user's active provider config, or throw a clear error.
+export async function getActiveProvider(ownerId: string) {
   const setting = await prisma.providerSetting.findFirst({
-    where: { ownerId: OWNER_ID, isActive: true },
+    where: { ownerId, isActive: true },
   });
   if (!setting) throw new Error("No active AI provider. Configure one in Settings.");
   if (!setting.apiKey) throw new Error("Active provider has no API key. Add it in Settings.");
@@ -23,12 +25,12 @@ export async function getActiveProvider() {
   return setting;
 }
 
-async function run(system: string, prompt: string, json = true, maxTokens = 4096) {
-  const p = await getActiveProvider();
+async function run(ownerId: string, system: string, prompt: string, json = true, maxTokens = 4096) {
+  const p = await getActiveProvider(ownerId);
   const result = await chat({
     provider: p.provider as ProviderId,
     baseUrl: p.baseUrl,
-    apiKey: p.apiKey,
+    apiKey: decryptSecret(p.apiKey),
     model: p.model!,
     system,
     prompt,
@@ -43,11 +45,11 @@ export function profileHash(json: string): string {
 }
 
 // Build (or reuse cached) Candidate Intelligence Profile.
-export async function ensureIntelligence(force = false): Promise<{
+export async function ensureIntelligence(ownerId: string, force = false): Promise<{
   data: IntelligenceData;
   stale: boolean;
 }> {
-  const profile = await getOrCreateProfile();
+  const profile = await getOrCreateProfile(ownerId);
   const json = serializeProfile(profile);
   const hash = profileHash(json);
 
@@ -55,8 +57,9 @@ export async function ensureIntelligence(force = false): Promise<{
     return { data: JSON.parse(profile.intelligence.data) as IntelligenceData, stale: false };
   }
 
+  if (force) await enforceRateLimit(ownerId, "intelligence");
   const { system, prompt } = intelligencePrompt(json);
-  const { text, model } = await run(system, prompt, true, 4000);
+  const { text, model } = await run(ownerId, system, prompt, true, 4000);
   const data = parseJson<IntelligenceData>(text);
 
   await prisma.intelligenceProfile.upsert({
@@ -68,15 +71,16 @@ export async function ensureIntelligence(force = false): Promise<{
 }
 
 // Analyze a job: create Job row, run analysis against intelligence profile.
-export async function analyzeJob(input: { sourceUrl?: string; rawText: string }) {
-  const { data: intel } = await ensureIntelligence();
+export async function analyzeJob(ownerId: string, input: { sourceUrl?: string; rawText: string }) {
+  await enforceRateLimit(ownerId, "analyze");
+  const { data: intel } = await ensureIntelligence(ownerId);
   const { system, prompt } = jobAnalysisPrompt(input.rawText, JSON.stringify(intel));
-  const { text } = await run(system, prompt, true, 8000);
+  const { text } = await run(ownerId, system, prompt, true, 8000);
   const analysis = parseJson<JobAnalysis>(text);
 
   const job = await prisma.job.create({
     data: {
-      ownerId: OWNER_ID,
+      ownerId,
       sourceUrl: input.sourceUrl,
       rawText: input.rawText,
       title: analysis.title,
@@ -93,12 +97,15 @@ export async function analyzeJob(input: { sourceUrl?: string; rawText: string })
 
 // Generate a resume or cover letter for a job.
 export async function generate(
+  ownerId: string,
   jobId: string,
   kind: "resume" | "cover_letter",
   format: "A4" | "Letter"
 ) {
-  const job = await prisma.job.findUniqueOrThrow({ where: { id: jobId } });
-  const profile = await getOrCreateProfile();
+  const job = await prisma.job.findFirst({ where: { id: jobId, ownerId } });
+  if (!job) throw new Error("Job not found.");
+  await enforceRateLimit(ownerId, "generate");
+  const profile = await getOrCreateProfile(ownerId);
   const profileJson = serializeProfile(profile);
   const analysisJson = job.analysis ?? "{}";
   const analysis = JSON.parse(analysisJson) as JobAnalysis;
@@ -109,7 +116,7 @@ export async function generate(
       ? resumePrompt(profileJson, analysisJson, format, language)
       : coverLetterPrompt(profileJson, analysisJson, language);
 
-  const { text, model } = await run(built.system, built.prompt, true, kind === "resume" ? 8000 : 4000);
+  const { text, model } = await run(ownerId, built.system, built.prompt, true, kind === "resume" ? 8000 : 4000);
   const content =
     kind === "resume" ? parseJson<ResumeDoc>(text) : parseJson<CoverLetterDoc>(text);
 
@@ -127,7 +134,7 @@ export async function generate(
   const prior = await prisma.generation.count({ where: { jobId, kind } });
   const gen = await prisma.generation.create({
     data: {
-      ownerId: OWNER_ID,
+      ownerId,
       jobId,
       kind,
       language,

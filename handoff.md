@@ -23,7 +23,14 @@ Then: **Settings** → add a provider API key → **Load models** → pick a mod
 - [x] Photo upload with type/size/aspect-ratio validation.
 - [x] Dashboard, Profile, Settings, Analyzer, Job detail, History pages.
 - [x] Design skill: 3 auto-selected resume templates (ats / modern / photo), instant template switching, photo embedded for photo-expecting markets.
+- [x] P0: built-in auth (email+password, DB sessions, middleware), multi-tenant scoping by `ownerId=user.id`, AES-256-GCM encrypted API keys, per-user rate limiting.
 - [x] `next build` green.
+
+## P0 status (MVP → service)
+- [x] Auth + multi-tenant.
+- [x] Encrypted API keys at rest.
+- [x] Rate limiting (fixed-window per user+action).
+- [ ] PostgreSQL: code/schema are Postgres-ready; flip `datasource.provider` + `DATABASE_URL` at deploy (still SQLite locally by choice).
 
 ## Open tasks
 - [ ] Persist a user's manual template override (currently `?template=` preview only; auto choice is what's stored).

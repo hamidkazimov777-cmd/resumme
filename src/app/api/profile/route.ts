@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getOrCreateProfile } from "@/server/profile";
+import { currentUserId, unauthorized } from "@/server/auth";
 
 export async function GET() {
-  const profile = await getOrCreateProfile();
+  const userId = await currentUserId();
+  if (!userId) return unauthorized();
+  const profile = await getOrCreateProfile(userId);
   return NextResponse.json(profile);
 }
 
@@ -85,13 +88,15 @@ const schema = z.object({
 const toDate = (v?: string | null) => (v ? new Date(v) : null);
 
 export async function PUT(req: NextRequest) {
+  const userId = await currentUserId();
+  if (!userId) return unauthorized();
   const body = await req.json();
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
   const d = parsed.data;
-  const profile = await getOrCreateProfile();
+  const profile = await getOrCreateProfile(userId);
   const id = profile.id;
 
   await prisma.$transaction([
@@ -181,6 +186,6 @@ export async function PUT(req: NextRequest) {
     }),
   ]);
 
-  const updated = await getOrCreateProfile();
+  const updated = await getOrCreateProfile(userId);
   return NextResponse.json(updated);
 }

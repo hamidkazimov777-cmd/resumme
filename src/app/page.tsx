@@ -1,6 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
-import { OWNER_ID } from "@/lib/constants";
+import { getSessionUser } from "@/server/auth";
 import { getOrCreateProfile, completeness } from "@/server/profile";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, Progress, Badge } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
@@ -14,14 +15,16 @@ function scoreVariant(n: number): "success" | "warning" | "danger" {
 }
 
 export default async function Dashboard() {
-  const profile = await getOrCreateProfile();
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
+  const profile = await getOrCreateProfile(user.id);
   const pct = completeness(profile);
 
   const [resumeCount, coverCount, jobs] = await Promise.all([
-    prisma.generation.count({ where: { ownerId: OWNER_ID, kind: "resume" } }),
-    prisma.generation.count({ where: { ownerId: OWNER_ID, kind: "cover_letter" } }),
+    prisma.generation.count({ where: { ownerId: user.id, kind: "resume" } }),
+    prisma.generation.count({ where: { ownerId: user.id, kind: "cover_letter" } }),
     prisma.job.findMany({
-      where: { ownerId: OWNER_ID },
+      where: { ownerId: user.id },
       orderBy: { createdAt: "desc" },
       take: 5,
       include: { generations: true },

@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { OWNER_ID } from "@/lib/constants";
+import { currentUserId, unauthorized } from "@/server/auth";
 
 export async function GET() {
+  const userId = await currentUserId();
+  if (!userId) return unauthorized();
   const jobs = await prisma.job.findMany({
-    where: { ownerId: OWNER_ID },
+    where: { ownerId: userId },
     orderBy: { createdAt: "desc" },
     include: { generations: { orderBy: { createdAt: "desc" } } },
   });

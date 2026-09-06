@@ -4,6 +4,7 @@ import path from "path";
 import { imageSize } from "image-size";
 import { prisma } from "@/lib/db";
 import { getOrCreateProfile } from "@/server/profile";
+import { currentUserId, unauthorized } from "@/server/auth";
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
@@ -13,6 +14,8 @@ const MAX_RATIO = 0.9;
 const MIN_DIM = 300; // px shortest side
 
 export async function POST(req: NextRequest) {
+  const userId = await currentUserId();
+  if (!userId) return unauthorized();
   const form = await req.formData();
   const file = form.get("photo");
   if (!(file instanceof File)) {
@@ -44,7 +47,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const profile = await getOrCreateProfile();
+  const profile = await getOrCreateProfile(userId);
   const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
   const dir = path.join(process.cwd(), "public", "uploads");
   await mkdir(dir, { recursive: true });

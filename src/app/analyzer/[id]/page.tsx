@@ -1,6 +1,7 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { getSessionUser } from "@/server/auth";
 import { Card, CardContent, CardHeader, CardTitle, Badge, Progress } from "@/components/ui/primitives";
 import { GenerationStudio } from "@/components/generation-studio";
 import type { JobAnalysis } from "@/lib/types";
@@ -19,8 +20,10 @@ function List({ title, items, variant }: { title: string; items?: string[]; vari
 }
 
 export default async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
   const { id } = await params;
-  const job = await prisma.job.findUnique({ where: { id }, include: { generations: { orderBy: { createdAt: "desc" } } } });
+  const job = await prisma.job.findFirst({ where: { id, ownerId: user.id }, include: { generations: { orderBy: { createdAt: "desc" } } } });
   if (!job) notFound();
 
   const a: JobAnalysis = job.analysis ? JSON.parse(job.analysis) : ({} as JobAnalysis);
