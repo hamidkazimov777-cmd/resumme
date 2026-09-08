@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getOrCreateProfile } from "@/server/profile";
 import { currentUserId, unauthorized } from "@/server/auth";
+import { readJsonBody } from "@/server/json";
 
 export async function GET() {
   const userId = await currentUserId();
@@ -90,7 +91,7 @@ const toDate = (v?: string | null) => (v ? new Date(v) : null);
 export async function PUT(req: NextRequest) {
   const userId = await currentUserId();
   if (!userId) return unauthorized();
-  const body = await req.json();
+  const body = await readJsonBody(req);
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
