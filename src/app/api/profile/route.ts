@@ -13,11 +13,19 @@ export async function GET() {
 
 const strArray = z.array(z.string()).optional().default([]);
 
+// Dates arrive as free text from the form. `new Date("salam")` is an Invalid
+// Date, and Prisma rejects it while writing, which surfaced as a 500 instead of
+// a field error. Catching it here keeps the answer a 400 the form can show.
+const dateString = z
+  .string()
+  .refine((v) => v === "" || !Number.isNaN(new Date(v).getTime()), "Enter a valid date.")
+  .nullish();
+
 const schema = z.object({
   firstName: z.string().nullish(),
   lastName: z.string().nullish(),
   middleName: z.string().nullish(),
-  birthDate: z.string().nullish(),
+  birthDate: dateString,
   city: z.string().nullish(),
   country: z.string().nullish(),
   email: z.string().nullish(),
@@ -38,8 +46,8 @@ const schema = z.object({
         company: z.string(),
         companyUrl: z.string().nullish(),
         position: z.string(),
-        startDate: z.string().nullish(),
-        endDate: z.string().nullish(),
+        startDate: dateString,
+        endDate: dateString,
         current: z.boolean().optional().default(false),
         location: z.string().nullish(),
         employment: z.string().nullish(),
@@ -68,7 +76,7 @@ const schema = z.object({
         organization: z.string().nullish(),
         url: z.string().nullish(),
         credentialId: z.string().nullish(),
-        issueDate: z.string().nullish(),
+        issueDate: dateString,
       })
     )
     .default([]),
