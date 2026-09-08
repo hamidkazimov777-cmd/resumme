@@ -4,6 +4,78 @@ Reverse-chronological. Every change appends an entry: what, files, why, next.
 
 ---
 
+## 2026-09-07 — Full local hardening: audit fixes, reliability & UI polish
+
+**What** — Full local refinement based on comprehensive engineering audit:
+- Fixed AI 400 Bad Request error on Anthropic by safely clamping `maxTokens` to 8192; enhanced `parseJson` to tolerate unescaped control characters/newlines.
+- SSRF protection added to URL vacancy fetcher (blocks loopback, cloud metadata, RFC 1918 private ranges; 6s timeout).
+- Dashboard bug fixed: "Jobs Analyzed" now uses total count `prisma.job.count()` rather than `jobs.length` capped at 5.
+- Data integrity in PDF: removed data destruction in `trimDoc` so certifications, projects and experience bullets are never silently dropped.
+- Design themes: all 4 templates (`Classic`, `Modern`, `Photo`, `Executive`) are selectable in UI; user selection is persisted to DB via new `PATCH /api/generations/[id]` route.
+- Deletion actions: added `DeleteJobButton` on vacancy detail page and `DeleteGenerationButton` in History and Generation Studio.
+- Profile UX: added `isDirty` tracking with `beforeunload` confirmation to prevent accidental data loss, responsive layout for mobile/tablet.
+- Responsive layout: mobile drawer navigation + responsive top bar in `Sidebar` + `RootLayout`.
+- Build stability: updated `package.json` build script to `--webpack` and configured font tracing in `next.config.ts`.
+
+**Files**
+- `src/lib/ai/client.ts`
+- `src/server/ai.ts`
+- `src/app/api/analyze/route.ts`
+- `src/app/api/generations/[id]/route.ts`
+- `src/lib/pdf/documents.tsx`
+- `src/app/page.tsx`
+- `src/components/generation-studio.tsx`
+- `src/components/delete-job-button.tsx`
+- `src/components/delete-generation-button.tsx`
+- `src/app/analyzer/[id]/page.tsx`
+- `src/app/history/page.tsx`
+- `src/app/profile/page.tsx`
+- `src/app/settings/page.tsx`
+- `src/components/sidebar.tsx`
+- `src/app/layout.tsx`
+- `package.json`
+- `next.config.ts`
+
+**Verified** — `npx tsc --noEmit` clean, `npm run build` green (19 routes generated).
+
+## 2026-09-06 — Template pair fixed to Modern + Photo
+
+**What** — `selectTemplatePair` no longer auto-selects per market/role. The two
+resume versions are now always **Modern** and **Photo** (when a photo file
+exists). Without a photo the second version falls back to Executive for senior
+roles, otherwise Classic.
+
+**Files**
+- `src/lib/design/templates.ts` — `selectTemplatePair` rewritten; `selectTemplate`
+  kept for cover letters and single-template picks.
+
+---
+
+## 2026-09-06 — Resume generation now returns 2 versions (was 4 template variants)
+
+**What** — One "Generate resume" click previously surfaced 4 choices (4 template
+chips re-rendering one text). Now a single click produces exactly **2 saved
+resume versions**: two genuinely different texts (achievement-first vs
+expertise-first) from ONE AI call, each stored as its own Generation row with
+its own auto-selected template (two distinct templates via `selectTemplatePair`).
+Per-version template chips reduced to 2 (auto + one alternative).
+
+**Files**
+- `src/lib/prompts/tasks.ts` — `resumePrompt(..., versions)` emits a
+  `{"versions": [...]}` spec with differentiation guidance when versions > 1.
+- `src/server/ai.ts` — `generate()` split: cover letter unchanged; resume calls
+  the model once (maxTokens 8000→16000), tolerates a single-object fallback,
+  and creates 2 Generation rows continuing the version numbering.
+- `src/lib/design/templates.ts` — added `selectTemplatePair` (auto pick + most
+  relevant distinct alternative; executive-aware ordering).
+- `src/app/api/generate/route.ts` — response now `{ generationIds, versions }`.
+- `src/components/generation-studio.tsx` — button "Generate resume (2 versions)";
+  GenRow offers only 2 template chips (auto + one alternative).
+
+**Verified** — `tsc --noEmit` clean, `next build` green (19 routes).
+
+---
+
 ## 2026-09-05 — P0: auth + multi-tenant, encrypted keys, rate limiting
 
 **What** — Turned the single-owner MVP into a real multi-user service (still local,

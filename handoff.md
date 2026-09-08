@@ -18,7 +18,7 @@ Then: **Settings** → add a provider API key → **Load models** → pick a mod
 - [x] Master prompt system (hidden) + task prompt builders.
 - [x] Candidate Intelligence Profile (computed once, cached by source-hash).
 - [x] Job analyzer: market, language, seniority, ATS requirements, keywords, 0–100 match with strong/weak/gaps.
-- [x] Resume + Cover Letter generation (versioned), tailored via profile + analysis + master prompts.
+- [x] Resume generation returns 2 distinct versions per click (one AI call, two saved Generation rows, two auto-selected templates); Cover Letter generation (versioned), tailored via profile + analysis + master prompts.
 - [x] ATS-friendly PDF export (A4 / Letter), real text, single column.
 - [x] Photo upload with type/size/aspect-ratio validation.
 - [x] Dashboard, Profile, Settings, Analyzer, Job detail, History pages.
