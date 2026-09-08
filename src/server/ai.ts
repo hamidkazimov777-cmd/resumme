@@ -11,7 +11,7 @@ import {
 } from "@/lib/prompts/tasks";
 import { serializeProfile, getOrCreateProfile, type FullProfile } from "./profile";
 import { enforceRateLimit } from "./ratelimit";
-import { selectTemplate } from "@/lib/design/templates";
+import { selectTemplate, selectTemplatePair } from "@/lib/design/templates";
 import type { IntelligenceData, JobAnalysis, ResumeDoc, CoverLetterDoc } from "@/lib/types";
 
 // Resolve the user's active provider config, or throw a clear error.
@@ -95,7 +95,10 @@ export async function analyzeJob(ownerId: string, input: { sourceUrl?: string; r
   return { job, analysis };
 }
 
-// Generate a resume or cover letter for a job.
+// How many resume versions a single "Generate resume" click produces.
+const RESUME_VERSIONS = 2;
+
+// Generate a resume (2 versions) or a cover letter for a job.
 export async function generate(
   ownerId: string,
   jobId: string,
@@ -111,41 +114,75 @@ export async function generate(
   const analysis = JSON.parse(analysisJson) as JobAnalysis;
   const language = analysis.language || "English";
 
-  const built =
-    kind === "resume"
-      ? resumePrompt(profileJson, analysisJson, format, language)
-      : coverLetterPrompt(profileJson, analysisJson, language);
+  // --- Cover letter: single document, unchanged behavior. ---
+  if (kind === "cover_letter") {
+    const built = coverLetterPrompt(profileJson, analysisJson, language);
+    const { text, model } = await run(ownerId, built.system, built.prompt, true, 4000);
+    const content = parseJson<CoverLetterDoc>(text);
+    const template = selectTemplate({
+      market: analysis.market,
+      seniority: analysis.seniority,
+      title: analysis.title,
+      includePhoto: false,
+      hasPhotoFile: !!profile.photoPath,
+    });
+    const prior = await prisma.generation.count({ where: { jobId, kind } });
+    const gen = await prisma.generation.create({
+      data: {
+        ownerId,
+        jobId,
+        kind,
+        language,
+        format,
+        template,
+        model,
+        content: JSON.stringify(content),
+        version: prior + 1,
+      },
+    });
+    return { generations: [gen], contents: [content] };
+  }
 
-  const { text, model } = await run(ownerId, built.system, built.prompt, true, kind === "resume" ? 8000 : 4000);
-  const content =
-    kind === "resume" ? parseJson<ResumeDoc>(text) : parseJson<CoverLetterDoc>(text);
+  // --- Resume: 2 distinct versions from ONE AI call. ---
+  const built = resumePrompt(profileJson, analysisJson, format, language, RESUME_VERSIONS);
+  const { text, model } = await run(ownerId, built.system, built.prompt, true, 16000);
+  const parsed = parseJson<{ versions?: ResumeDoc[] } & ResumeDoc>(text);
+  // Tolerate models that ignore the wrapper and return a single resume object.
+  const versions = (Array.isArray(parsed.versions) && parsed.versions.length
+    ? parsed.versions
+    : [parsed as ResumeDoc]
+  ).slice(0, RESUME_VERSIONS);
 
-  // Design skill: auto-select a visual template from market/role/photo signals.
-  const includePhoto = kind === "resume" ? (content as ResumeDoc).includePhoto : false;
-  const template = selectTemplate({
+  // Design skill: auto-select two distinct templates from market/role/photo signals.
+  const pair = selectTemplatePair({
     market: analysis.market,
     seniority: analysis.seniority,
     title: analysis.title,
-    includePhoto,
+    includePhoto: versions.some((v) => v.includePhoto),
     hasPhotoFile: !!profile.photoPath,
   });
 
-  // Version = count of existing generations of this kind for this job + 1.
+  // Versions continue the existing numbering for this job + kind.
   const prior = await prisma.generation.count({ where: { jobId, kind } });
-  const gen = await prisma.generation.create({
-    data: {
-      ownerId,
-      jobId,
-      kind,
-      language,
-      format,
-      template,
-      model,
-      content: JSON.stringify(content),
-      version: prior + 1,
-    },
-  });
-  return { generation: gen, content };
+  const generations = [];
+  for (let i = 0; i < versions.length; i++) {
+    generations.push(
+      await prisma.generation.create({
+        data: {
+          ownerId,
+          jobId,
+          kind,
+          language,
+          format,
+          template: pair[i] ?? pair[0],
+          model,
+          content: JSON.stringify(versions[i]),
+          version: prior + i + 1,
+        },
+      })
+    );
+  }
+  return { generations, contents: versions };
 }
 
 function clampScore(n: unknown): number {

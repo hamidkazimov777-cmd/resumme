@@ -95,12 +95,15 @@ async function chatAnthropic(opts: ChatOptions): Promise<ChatResult> {
     .filter(Boolean)
     .join("\n\n");
 
+  // Anthropic limits max_tokens to 8192 on Sonnet models (4096 on Opus).
+  const maxTokens = Math.min(opts.maxTokens ?? 4096, 8192);
+
   const res = await fetch(url, {
     method: "POST",
     headers: { ...authHeaders("anthropic", opts.apiKey), "content-type": "application/json" },
     body: JSON.stringify({
       model: opts.model,
-      max_tokens: opts.maxTokens ?? 4096,
+      max_tokens: maxTokens,
       temperature: opts.temperature ?? 0.4,
       ...(system ? { system } : {}),
       messages: [{ role: "user", content: opts.prompt }],
@@ -119,7 +122,7 @@ function authHeaders(kind: "openai" | "anthropic", apiKey: string): Record<strin
   return { authorization: `Bearer ${apiKey}` };
 }
 
-/** Parse a JSON object out of a model response, tolerating markdown fences. */
+/** Parse a JSON object out of a model response, tolerating markdown fences and unescaped characters. */
 export function parseJson<T = unknown>(text: string): T {
   const cleaned = text
     .trim()
@@ -131,7 +134,24 @@ export function parseJson<T = unknown>(text: string): T {
   } catch {
     // Fall back to first {...} or [...] block.
     const match = cleaned.match(/[{[][\s\S]*[}\]]/);
-    if (match) return JSON.parse(match[0]) as T;
+    if (match) {
+      try {
+        return JSON.parse(match[0]) as T;
+      } catch {
+        // Fix unescaped control characters inside JSON strings (e.g. raw newlines in multi-line strings)
+        const sanitized = match[0].replace(/[\u0000-\u001F]+/g, (match) => {
+          if (match === "\n") return "\\n";
+          if (match === "\r") return "\\r";
+          if (match === "\t") return "\\t";
+          return "";
+        });
+        try {
+          return JSON.parse(sanitized) as T;
+        } catch {
+          // fall through
+        }
+      }
+    }
     throw new Error("Model did not return valid JSON.");
   }
 }

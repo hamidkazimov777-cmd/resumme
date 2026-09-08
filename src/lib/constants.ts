@@ -23,7 +23,7 @@ export const PROVIDERS: Record<ProviderId, ProviderDef> = {
     label: "TokenRouter",
     baseUrl: "https://api.tokenrouter.io/v1",
     kind: "openai",
-    docsHint: "OpenAI-compatible gateway.",
+    docsHint: "OpenAI-compatible gateway. API keys start with tr_ — copy one from Console → API Keys (tokenrouter.io/console), not from Providers.",
   },
   anthropic: {
     id: "anthropic",

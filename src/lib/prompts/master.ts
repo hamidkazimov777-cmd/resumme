@@ -37,6 +37,16 @@ Recruiter & HR expectations:
 - Consistency and honesty over embellishment; recruiters verify.
 `.trim();
 
+export const HUMAN_VOICE = `
+Write like a person, not a generator:
+- BAN these overused AI-resume words/phrases: "spearheaded", "leveraged", "utilized", "synergy", "dynamic", "results-driven", "passionate about", "seasoned", "proven track record", "in order to", "responsible for", "duties included", "successfully".
+- Prefer plain, direct verbs: led, built, grew, cut, shipped, launched, redesigned, automated, negotiated, closed, trained.
+- Vary sentence openings; never start three bullets in a row with the same verb.
+- No buzzword stacking or adjective padding. One strong fact beats three modifiers.
+- Concrete nouns and real numbers over abstractions. If it sounds like marketing copy, rewrite it.
+- Read it as if a hiring manager wrote it about themselves at 11pm — terse, factual, slightly imperfect beats polished-and-generic.
+`.trim();
+
 export const COVER_LETTER_RULES = `
 Cover letter craft:
 - 3–4 short paragraphs, ~250–350 words. Addressed to the company/role.
@@ -71,8 +81,8 @@ export function buildMasterSystem(opts: MasterOptions = {}): string {
     ATS_BEST_PRACTICES,
     RECRUITER_EXPECTATIONS,
   ];
-  if (opts.includeResumeRules) blocks.push(RESUME_WRITING);
-  if (opts.includeCoverRules) blocks.push(COVER_LETTER_RULES);
+  if (opts.includeResumeRules) blocks.push(RESUME_WRITING, HUMAN_VOICE);
+  if (opts.includeCoverRules) blocks.push(COVER_LETTER_RULES, HUMAN_VOICE);
   if (opts.includeCountry) blocks.push(COUNTRY_RULES);
   blocks.push(
     "Integrity rule: use ONLY facts present in the provided candidate profile. Never invent experience, metrics, titles, or credentials. If a metric is unknown, omit it rather than guessing."

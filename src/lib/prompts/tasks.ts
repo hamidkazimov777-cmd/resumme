@@ -64,21 +64,15 @@ ${jobText}`,
   };
 }
 
-// 3) Resume generation.
+// 3) Resume generation — one or more distinct versions in a single call.
 export function resumePrompt(
   profileJson: string,
   analysisJson: string,
   format: string,
-  language: string
+  language: string,
+  versions = 1
 ): BuiltPrompt {
-  return {
-    system: buildMasterSystem({ includeResumeRules: true, includeCountry: true }),
-    prompt: `Generate an ATS-optimized resume tailored to this job. Page format: ${format}. Language: ${language}.
-
-Apply the detected market's country rules (photo/DOB inclusion, page conventions). Set "includePhoto" accordingly.
-
-Return a JSON object with EXACTLY these keys:
-{
+  const oneVersion = `{
   "fullName": string,
   "headline": string,                 // target-role title
   "location": string,
@@ -91,17 +85,42 @@ Return a JSON object with EXACTLY these keys:
   "projects": [{ "name": string, "description": string, "technologies": string[], "url": string }],
   "languages": [{ "name": string, "level": string }],
   "includePhoto": boolean
+}`;
+
+  const outputSpec =
+    versions > 1
+      ? `Return a JSON object with EXACTLY one key:
+{
+  "versions": [ ${oneVersion} ]       // EXACTLY ${versions} resume objects
 }
+
+The ${versions} versions must be genuinely different takes on the SAME facts:
+- Version 1: achievement-first — lead every bullet with the strongest quantified outcome; summary emphasizes impact and scope.
+- Version 2: expertise-first — reorder skills/experience emphasis toward the job's core requirements; different summary angle, different bullet selection and phrasing.
+- Never copy a sentence verbatim between versions. Same facts, different writing.`
+      : `Return a JSON object with EXACTLY these keys:
+${oneVersion}`;
+
+  return {
+    system: buildMasterSystem({ includeResumeRules: true, includeCountry: true }),
+    prompt: `Generate ${versions > 1 ? `${versions} distinct versions of ` : "an "}ATS-optimized resume${versions > 1 ? "s" : ""} tailored to this job. Page format: ${format}. Language: ${language}.
+
+Apply the detected market's country rules (photo/DOB inclusion, page conventions). Set "includePhoto" accordingly.
+
+${outputSpec}
 
 Mirror job keywords the candidate genuinely has. Quantify achievements. Use ONLY profile facts.
 
-LENGTH — fit ONE page (${format}). Be ruthless and selective:
-- Summary: 2-3 tight sentences, no filler.
-- Prioritize the most relevant and recent experience. Cap the top/most-relevant role at 4-5 bullets; older or less-relevant roles at 1-2 bullets, and compress or omit roles that add little for THIS job.
-- Choose the strongest, most job-relevant bullets only — do not list everything.
-- Keep at most the 3-4 most relevant projects, one short line each.
-- Group skills tightly; drop skill lines irrelevant to this job.
-- Prefer short, dense wording over long sentences. The whole document must comfortably fit on a single page.
+CRITICAL LENGTH CONSTRAINT — EACH version must fit onto EXACTLY ONE single page (${format}):
+- Summary: 2 tight, high-impact sentences MAX (~35-40 words total). No buzzwords or fluff.
+- Experience roles: Include only the 2-3 most relevant positions.
+- Experience bullets: Total bullets across ALL positions combined must be 5 to 6 bullets MAXIMUM (e.g. 3 for the top role, 2 for the second, 1 for the third). Never generate more than 6 bullets total across the entire document.
+- Bullet brevity: Each bullet MUST be a single punchy line (10-14 words max). Lead with an active verb and a metric. Never write multi-sentence bullets or narrative paragraphs.
+- Projects: Include at most 2-3 most relevant projects. Project descriptions must be strictly 1 concise line (under 14 words).
+- Skills: Group tightly into 3-4 categories max.
+- Education: Max 2 entries.
+- Certifications: Max 2 entries.
+- Avoid unnecessary length. Every word must count. The entire document must comfortably fit on 1 page without overflowing.
 
 CANDIDATE PROFILE (JSON):
 ${profileJson}
