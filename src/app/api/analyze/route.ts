@@ -51,7 +51,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ jobId: job.id, analysis });
   } catch (e) {
     if (e instanceof RateLimitError) {
-      return NextResponse.json({ error: "Too many analyses this hour. Try again later." }, { status: 429 });
+      // Tell the caller when the window reopens, so a client can wait the
+      // right amount instead of guessing or hammering.
+      return NextResponse.json(
+        { error: "Too many analyses this hour. Try again later." },
+        { status: 429, headers: { "retry-after": String(e.retryAfterSec) } }
+      );
     }
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }

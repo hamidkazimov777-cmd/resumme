@@ -21,7 +21,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ generationId: generation.id, version: generation.version, content });
   } catch (e) {
     if (e instanceof RateLimitError) {
-      return NextResponse.json({ error: "Too many generations this hour. Try again later." }, { status: 429 });
+      // Tell the caller when the window reopens, so a client can wait the
+      // right amount instead of guessing or hammering.
+      return NextResponse.json(
+        { error: "Too many generations this hour. Try again later." },
+        { status: 429, headers: { "retry-after": String(e.retryAfterSec) } }
+      );
     }
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
