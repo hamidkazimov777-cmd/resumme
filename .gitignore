@@ -12,3 +12,11 @@ out
 
 # build info
 *.tsbuildinfo
+
+# tooling
+.magnetar/
+.preview/
+
+# local template preview renders
+/prev_new_*.png
+/preview-*.png
