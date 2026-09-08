@@ -60,6 +60,7 @@ const PAGE_SIZE = { A4: "A4", Letter: "LETTER" } as const;
 function makeStyles(theme: Theme, profile?: DensityProfile) {
   const t = theme.type;
   const plain = theme.headerStyle === "plain";
+  const serif = /serif/i.test(theme.bodyFont) || /serif/i.test(theme.headFont);
   const sectionGap = profile?.sectionGap ?? 9;
   const itemGap = profile?.itemGap ?? 5;
   const paddingTop = profile?.paddingTop ?? 24;
@@ -83,6 +84,13 @@ function makeStyles(theme: Theme, profile?: DensityProfile) {
       lineHeight: theme.leading,
       color: theme.ink,
       fontFamily: theme.bodyFont,
+      // ATS-CRITICAL, serif only: Source Serif maps "fi"/"ft"/"ff" to single
+      // ligature glyphs whose ToUnicode drops a character on text extraction
+      // ("Swift" → "Swif"), silently breaking ATS keyword matching — so disable
+      // ligatures for it. Inter has correct ToUnicode for its ligatures, and
+      // forcing features off on it can instead corrupt the subset, so leave
+      // Inter's defaults alone. Inherited by all Text on the page.
+      ...(serif ? { fontFeatureSettings: { liga: false, clig: false, dlig: false, calt: false } } : {}),
     },
 
     // --- Header ---
@@ -158,16 +166,43 @@ function makeStyles(theme: Theme, profile?: DensityProfile) {
     // Tech stack on the right of a project row: right-aligned, may wrap.
     itemTech: { fontSize: t.small, color: theme.muted, flexShrink: 0, maxWidth: "48%", textAlign: "right", paddingLeft: 8 },
 
+    // --- Items: company on its own line in accent (colored themes only) ---
+    itemCompany: { fontSize: t.small + 1, color: theme.accent, fontFamily: theme.headFont, fontWeight: 600, marginTop: 0.5 },
+
     // --- Bullets ---
     bullet: { flexDirection: "row", marginTop: bulletGap, paddingLeft: 2 },
     bulletDot: { width: 10, color: theme.muted },
+    // Colored themes use a small square accent marker (like the gold-standard
+    // references) instead of a dash — drawn as a View so it needs no glyph.
+    bulletMark: { width: 3.4, height: 3.4, borderRadius: 0.8, backgroundColor: theme.accent, marginTop: t.body * 0.46, marginRight: 6 },
     bulletText: { flex: 1, color: theme.ink, lineHeight: theme.leading },
 
     // --- Skills / simple lines ---
     skillLine: { marginTop: bulletGap, lineHeight: theme.leading },
     skillCategory: { fontFamily: theme.headFont, fontWeight: 600, color: theme.ink },
+    // Skill chips (colored themes): a scannable band of rounded badges, the
+    // densest ATS keyword zone. Real text inside Views → fully parseable.
+    skillChipRow: { flexDirection: "row", flexWrap: "wrap", marginTop: 1 },
+    skillChip: {
+      fontSize: t.small,
+      color: theme.accent,
+      backgroundColor: theme.faint,
+      borderRadius: 3,
+      paddingVertical: 1.6,
+      paddingHorizontal: 6,
+      marginRight: 5,
+      marginBottom: 4,
+    },
 
     para: { marginBottom: 6, lineHeight: theme.leading },
+
+    // --- Cover letter ---
+    coverMeta: { fontSize: t.small + 0.5, color: theme.muted, marginBottom: 1.5 },
+    coverRecipient: { fontSize: t.body, color: theme.ink, fontFamily: theme.headFont, fontWeight: 600 },
+    coverGreeting: { fontSize: t.body, color: theme.ink, marginTop: 14, marginBottom: 9 },
+    coverPara: { fontSize: t.body, color: theme.ink, lineHeight: 1.5, marginBottom: 9, textAlign: "left" },
+    coverClosing: { fontSize: t.body, color: theme.ink, marginTop: 4 },
+    coverSignature: { fontSize: t.body + 1, fontFamily: theme.headFont, fontWeight: 700, color: theme.ink, marginTop: 2 },
   });
 }
 
@@ -414,22 +449,27 @@ function classify(c: Contact) {
 
 // One controlled line: inline links/text separated by a thin middot placed
 // only BETWEEN items, so nothing dangles at a line edge and the spacing is
-// perfectly even. Links are clickable; web/email use the accent color, plain
-// values stay muted.
-function ContactLine({ items, theme, size }: { items: Contact[]; theme: Theme; size: number }) {
+// perfectly even. EVERY item — links, email, phone, location — is the SAME
+// muted color so the block reads as one tidy line instead of a scatter of
+// blue and grey. Links stay clickable, just not colored.
+function ContactLine({ items, theme, size, tone = "muted", weight = 400 }: { items: Contact[]; theme: Theme; size: number; tone?: "muted" | "accent"; weight?: number }) {
   const present = items.filter((c) => c.value && c.value.trim());
   if (!present.length) return null;
+  // One uniform color for the WHOLE line (text, links, separators) so each row
+  // reads as one tidy block. Identity row is muted; the web-links row uses the
+  // accent so it stands out as its own block.
+  const color = tone === "accent" ? theme.accent : theme.muted;
   return (
-    <Text style={{ fontSize: size, lineHeight: 1.5 }}>
+    <Text style={{ fontSize: size, lineHeight: 1.5, fontWeight: weight }}>
       {present.map((c, i) => {
-        const { href, text, link } = classify(c);
+        const { href, text } = classify(c);
         return (
           <React.Fragment key={i}>
-            {i > 0 ? <Text style={{ color: theme.faint }}>{"  ·  "}</Text> : null}
+            {i > 0 ? <Text style={{ color }}>{"  ·  "}</Text> : null}
             {href ? (
-              <Link src={href} style={{ color: link ? theme.accent : theme.muted, textDecoration: "none" }}>{text}</Link>
+              <Link src={href} style={{ color, textDecoration: "none" }}>{text}</Link>
             ) : (
-              <Text style={{ color: theme.muted }}>{text}</Text>
+              <Text style={{ color }}>{text}</Text>
             )}
           </React.Fragment>
         );
@@ -446,10 +486,10 @@ function ContactBar({ items, theme, size }: { items: Contact[]; theme: Theme; si
   const web = items.filter(isWebItem);
   return (
     <View>
-      <ContactLine items={primary} theme={theme} size={size} />
+      <ContactLine items={primary} theme={theme} size={size} tone="muted" />
       {web.length ? (
-        <View style={{ marginTop: 1 }}>
-          <ContactLine items={web} theme={theme} size={size} />
+        <View style={{ marginTop: 2.5 }}>
+          <ContactLine items={web} theme={theme} size={size} tone="accent" weight={500} />
         </View>
       ) : null}
     </View>
@@ -532,12 +572,12 @@ function HeaderCreative({ doc, theme, s, photoSrc }: HeaderProps) {
   );
 }
 
-function Bullets({ items, s }: { items: string[]; s: ReturnType<typeof makeStyles> }) {
+function Bullets({ items, s, accent }: { items: string[]; s: ReturnType<typeof makeStyles>; accent: boolean }) {
   return (
     <>
       {items.filter(Boolean).map((b, i) => (
         <View key={i} style={s.bullet}>
-          <Text style={s.bulletDot}>–</Text>
+          {accent ? <View style={s.bulletMark} /> : <Text style={s.bulletDot}>–</Text>}
           <Text style={s.bulletText}>{b}</Text>
         </View>
       ))}
@@ -561,6 +601,10 @@ export function ResumePDF({
   const trimmedDoc = trimDoc(doc, profile);
   const s = makeStyles(theme, profile);
   const layout = layoutFor(theme);
+  // Colored themes (modern/photo/creative) get the polished, reference-style
+  // treatment: skill chips, accent bullet markers, company on its own accent
+  // line. Plain themes (classic serif / executive) stay restrained.
+  const colored = theme.headerStyle !== "plain";
   // Use trimmedDoc for all content rendering below.
   doc = trimmedDoc;
 
@@ -598,12 +642,20 @@ export function ResumePDF({
         {doc.skills?.length ? (
           <View style={s.section}>
             {secTitle("Skills")}
-            {doc.skills.map((g, i) => (
-              <Text key={i} style={s.skillLine}>
-                <Text style={s.skillCategory}>{g.category}: </Text>
-                {g.items.join(", ")}
-              </Text>
-            ))}
+            {colored ? (
+              <View style={s.skillChipRow}>
+                {doc.skills.flatMap((g) => g.items).filter(Boolean).map((item, i) => (
+                  <Text key={i} style={s.skillChip}>{item}</Text>
+                ))}
+              </View>
+            ) : (
+              doc.skills.map((g, i) => (
+                <Text key={i} style={s.skillLine}>
+                  <Text style={s.skillCategory}>{g.category}: </Text>
+                  {g.items.join(", ")}
+                </Text>
+              ))
+            )}
           </View>
         ) : null}
 
@@ -616,13 +668,14 @@ export function ResumePDF({
                   <View style={s.itemHeader}>
                     <Text style={s.itemTitle}>
                       {e.position}
-                      {e.company ? `, ${e.company}` : ""}
+                      {!colored && e.company ? `, ${e.company}` : ""}
                     </Text>
                     <Text style={s.itemDates}>{e.dates}</Text>
                   </View>
+                  {colored && e.company ? <Text style={s.itemCompany}>{e.company}</Text> : null}
                   {e.location ? <Text style={s.itemSub}>{e.location}</Text> : null}
                 </View>
-                <Bullets items={e.bullets ?? []} s={s} />
+                <Bullets items={e.bullets ?? []} s={s} accent={colored} />
               </View>
             ))}
           </View>
@@ -704,24 +757,32 @@ export function CoverLetterPDF({
   const theme = getTheme(template);
   const s = makeStyles(theme);
   const t = theme.type;
+  const colored = theme.headerStyle !== "plain";
   return (
     <Document title={`${doc.fullName} — Cover Letter`} author={doc.fullName}>
       <Page size={PAGE_SIZE[format]} style={s.page}>
+        {/* Header mirrors the resume: accent name, gray identity + accent link
+            block, thin accent rule — so the two documents read as one set. */}
         <Text style={s.name}>{doc.fullName}</Text>
-        <View style={{ marginTop: 6, marginBottom: 10 }}>
+        <View style={{ marginTop: 5 }}>
           <ContactBar theme={theme} size={t.small} items={doc.contacts ?? []} />
         </View>
-        {theme.headerStyle === "bar" ? <View style={s.accentBar} /> : null}
-        {doc.date ? <Text style={s.para}>{doc.date}</Text> : null}
-        {doc.recipient ? <Text style={s.para}>{doc.recipient}</Text> : null}
-        <Text style={s.para}>{doc.greeting}</Text>
-        {(doc.paragraphs ?? []).map((p, i) => (
-          <Text key={i} style={s.para}>
-            {p}
-          </Text>
+        <View style={[s.accentBar, { marginTop: 8, marginBottom: 0, height: colored ? 1.6 : 0.8 }]} />
+
+        {/* Date, then recipient — with breathing room, not loose line spacing. */}
+        {doc.date ? <Text style={[s.coverMeta, { marginTop: 16 }]}>{doc.date}</Text> : null}
+        {doc.recipient ? <Text style={[s.coverRecipient, { marginTop: doc.date ? 10 : 16 }]}>{doc.recipient}</Text> : null}
+
+        <Text style={s.coverGreeting}>{doc.greeting}</Text>
+
+        {(doc.paragraphs ?? []).filter(Boolean).map((p, i) => (
+          <Text key={i} style={s.coverPara}>{p}</Text>
         ))}
-        <Text>{doc.closing}</Text>
-        <Text style={{ fontFamily: theme.headFont, fontWeight: 600, marginTop: 6 }}>{doc.signature}</Text>
+
+        <View style={{ marginTop: 6 }}>
+          <Text style={s.coverClosing}>{doc.closing}</Text>
+          <Text style={s.coverSignature}>{doc.signature}</Text>
+        </View>
       </Page>
     </Document>
   );
