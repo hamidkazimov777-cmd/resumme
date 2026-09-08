@@ -30,6 +30,19 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
   const a: JobAnalysis = job.analysis ? JSON.parse(job.analysis) : ({} as JobAnalysis);
   const score = job.matchScore ?? 0;
   const scoreVar = score >= 75 ? "success" : score >= 50 ? "warning" : "danger";
+  const q = a.qualityScore;
+  const verdictVar = a.verdict === "Strong" ? "success" : a.verdict === "Weak" ? "danger" : "warning";
+  const statusVar = (s: string) => (s === "met" ? "success" : s === "partial" ? "warning" : "danger");
+  const qDims: Array<[string, number | undefined, number]> = q
+    ? [
+        ["Impact & evidence", q.impact, 25],
+        ["Relevance & tailoring", q.relevance, 25],
+        ["Clarity & structure", q.clarity, 15],
+        ["Visual / ATS", q.ats, 15],
+        ["Language quality", q.language, 10],
+        ["Completeness", q.completeness, 10],
+      ]
+    : [];
 
   return (
     <div className="flex flex-col gap-8">
@@ -53,7 +66,10 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Match score</CardTitle>
+            <div className="flex items-center gap-3">
+              <CardTitle>Match score</CardTitle>
+              {a.verdict ? <Badge variant={verdictVar}>{a.verdict}</Badge> : null}
+            </div>
             <span className="text-2xl font-semibold tabular-nums">{score}%</span>
           </div>
         </CardHeader>
@@ -66,6 +82,59 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
           </div>
         </CardContent>
       </Card>
+
+      {q ? (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Resume quality</CardTitle>
+              <span className="text-2xl font-semibold tabular-nums">{q.total}/100</span>
+            </div>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
+            {qDims.map(([label, val, weight]) => (
+              <div key={label} className="flex flex-col gap-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span>{label}</span>
+                  <span className="tabular-nums text-muted">{val ?? 0}/{weight}</span>
+                </div>
+                <Progress value={Math.round(((val ?? 0) / weight) * 100)} />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {a.requirementBreakdown?.length ? (
+        <Card>
+          <CardHeader><CardTitle>Requirement breakdown</CardTitle></CardHeader>
+          <CardContent className="flex flex-col gap-2.5">
+            {a.requirementBreakdown.map((r, i) => (
+              <div key={i} className="flex items-start justify-between gap-3 border-b border-border pb-2.5 last:border-0 last:pb-0">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-medium">{r.requirement}</span>
+                  {r.evidence ? <span className="text-xs text-muted">{r.evidence}</span> : null}
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Badge variant="muted" className="capitalize">{r.severity}</Badge>
+                  <Badge variant={statusVar(r.status)} className="capitalize">{r.status}</Badge>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {a.suggestions?.length ? (
+        <Card>
+          <CardHeader><CardTitle>How to raise your score</CardTitle></CardHeader>
+          <CardContent>
+            <ul className="flex list-disc flex-col gap-1.5 pl-5 text-sm">
+              {a.suggestions.map((s, i) => <li key={i}>{s}</li>)}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader><CardTitle>Requirements & ATS</CardTitle></CardHeader>

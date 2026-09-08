@@ -11,6 +11,29 @@ export interface IntelligenceData {
   directions: string[]; // suggested career directions
 }
 
+// Resume Quality Score — the six weighted dimensions from KB §4.1.
+// Each sub-score is that dimension's earned points (out of its own weight);
+// `total` is their sum on a 0-100 scale.
+export interface QualityScore {
+  impact: number; // achievement/quantified bullets (weight 25)
+  relevance: number; // tailoring to the target role (weight 25)
+  clarity: number; // structure, reverse-chron, order (weight 15)
+  ats: number; // clean, parseable layout, length (weight 15)
+  language: number; // active verbs, concise, error-free (weight 10)
+  completeness: number; // no gaps, nothing irrelevant (weight 10)
+  total: number; // 0-100
+}
+
+// One requirement decomposed from the vacancy, scored against the candidate.
+export interface RequirementMatch {
+  requirement: string;
+  status: "met" | "partial" | "missing";
+  severity: "high" | "medium" | "low"; // how important this requirement is
+  evidence?: string; // where the candidate demonstrates it (or why not)
+}
+
+export type Verdict = "Strong" | "Good with tailoring" | "Weak";
+
 export interface JobAnalysis {
   title?: string;
   company?: string;
@@ -21,7 +44,11 @@ export interface JobAnalysis {
   keywords: string[];
   responsibilities: string[];
   requirements: string[];
-  matchScore: number; // 0-100
+  matchScore: number; // 0-100 — the vacancy-match score (KB §4.2)
+  verdict?: Verdict; // overall verdict from KB §4.2
+  qualityScore?: QualityScore; // resume quality score (KB §4.1)
+  requirementBreakdown?: RequirementMatch[]; // per-requirement met/partial/missing
+  suggestions?: string[]; // specific rewrite suggestions to raise the score
   strong: string[]; // strong matches
   weak: string[]; // weak matches
   gaps: string[]; // missing

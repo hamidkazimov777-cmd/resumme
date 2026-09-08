@@ -1,0 +1,31 @@
+{
+  "name": "Weak fit — career changer missing core skills",
+  "profile": {
+    "personal": { "firstName": "Mara", "lastName": "Voss", "city": "Lyon", "country": "France" },
+    "contacts": { "email": "mara.voss@email.com" },
+    "skills": [
+      { "category": "soft", "name": "Customer Support" },
+      { "category": "tools", "name": "Zendesk" },
+      { "category": "soft", "name": "Communication" }
+    ],
+    "experience": [
+      {
+        "company": "HelpNest",
+        "position": "Customer Support Lead",
+        "start": "2020-01",
+        "end": "Present",
+        "achievements": ["Cut average ticket resolution time 30%", "Managed a team of 4 support agents"]
+      }
+    ],
+    "education": [
+      { "institution": "University of Lyon", "degree": "B.A.", "field": "Communication" }
+    ]
+  },
+  "vacancy": "Senior Data Engineer. Required: 5+ years building data pipelines, expert SQL, Python, Spark, Airflow, cloud data warehouses (Snowflake/BigQuery), dimensional modeling. You will design and own the company's batch and streaming data platform.",
+  "expect": {
+    "verdictOneOf": ["Weak"],
+    "maxMatchScore": 45,
+    "mustGaps": ["Python", "SQL"],
+    "qualityScoreRequired": true
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "name": "Strong fit — senior backend engineer",
+  "profile": {
+    "personal": { "firstName": "Daniel", "lastName": "Okonkwo", "city": "Berlin", "country": "Germany" },
+    "contacts": { "email": "d.okonkwo@email.com" },
+    "skills": [
+      { "category": "technical", "name": "Python" },
+      { "category": "technical", "name": "Go" },
+      { "category": "technical", "name": "Kubernetes" },
+      { "category": "technical", "name": "Kafka" },
+      { "category": "tools", "name": "AWS" }
+    ],
+    "experience": [
+      {
+        "company": "FinLayer GmbH",
+        "position": "Senior Backend Engineer",
+        "start": "2021-03",
+        "end": "Present",
+        "achievements": [
+          "Reduced cloud spend 38% by right-sizing workloads and autoscaling on Kubernetes",
+          "Led a 5-engineer team building a fraud-scoring pipeline that blocked EUR 2.1M in fraud"
+        ],
+        "metrics": ["p99 latency 840ms to 190ms", "12M daily transactions"]
+      },
+      {
+        "company": "Trivio Labs",
+        "position": "Backend Engineer",
+        "start": "2018-06",
+        "end": "2021-02",
+        "achievements": ["Built a Kafka ingestion pipeline handling 40k events/sec at 99.98% uptime"]
+      }
+    ],
+    "education": [
+      { "institution": "Technical University of Munich", "degree": "B.Sc.", "field": "Computer Science" }
+    ]
+  },
+  "vacancy": "Senior Backend Engineer (Remote, EU). We build high-throughput payment systems. Required: 5+ years backend, strong Python and Go, deep Kubernetes and Kafka experience, distributed systems, CI/CD pipelines. Nice to have: AWS, Terraform, fraud/risk domain. You will own service reliability and mentor engineers.",
+  "expect": {
+    "verdictOneOf": ["Strong", "Good with tailoring"],
+    "minMatchScore": 65,
+    "qualityScoreRequired": true
+  }
+}
