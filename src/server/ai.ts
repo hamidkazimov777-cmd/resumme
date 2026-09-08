@@ -9,9 +9,16 @@ import {
   resumePrompt,
   coverLetterPrompt,
 } from "@/lib/prompts/tasks";
-import { serializeProfile, getOrCreateProfile, type FullProfile } from "./profile";
+import {
+  serializeProfile,
+  getOrCreateProfile,
+  validateResumeAgainstProfile,
+  profileContacts,
+  profileFullName,
+  type FullProfile,
+} from "./profile";
 import { enforceRateLimit } from "./ratelimit";
-import { selectTemplate, selectTemplatePair } from "@/lib/design/templates";
+import type { TemplateId } from "@/lib/design/templates";
 import type { IntelligenceData, JobAnalysis, ResumeDoc, CoverLetterDoc } from "@/lib/types";
 
 // Resolve the user's active provider config, or throw a clear error.
@@ -59,7 +66,7 @@ export async function ensureIntelligence(ownerId: string, force = false): Promis
 
   if (force) await enforceRateLimit(ownerId, "intelligence");
   const { system, prompt } = intelligencePrompt(json);
-  const { text, model } = await run(ownerId, system, prompt, true, 4000);
+  const { text, model } = await run(ownerId, system, prompt, true, 8000);
   const data = parseJson<IntelligenceData>(text);
 
   await prisma.intelligenceProfile.upsert({
@@ -75,7 +82,9 @@ export async function analyzeJob(ownerId: string, input: { sourceUrl?: string; r
   await enforceRateLimit(ownerId, "analyze");
   const { data: intel } = await ensureIntelligence(ownerId);
   const { system, prompt } = jobAnalysisPrompt(input.rawText, JSON.stringify(intel));
-  const { text } = await run(ownerId, system, prompt, true, 8000);
+  // Reasoning models spend part of the token budget on hidden reasoning, so give
+  // the analysis (large structured output) generous headroom to avoid truncation.
+  const { text } = await run(ownerId, system, prompt, true, 14000);
   const analysis = parseJson<JobAnalysis>(text);
 
   const job = await prisma.job.create({
@@ -95,9 +104,6 @@ export async function analyzeJob(ownerId: string, input: { sourceUrl?: string; r
   return { job, analysis };
 }
 
-// How many resume versions a single "Generate resume" click produces.
-const RESUME_VERSIONS = 2;
-
 // Generate a resume (2 versions) or a cover letter for a job.
 export async function generate(
   ownerId: string,
@@ -114,18 +120,28 @@ export async function generate(
   const analysis = JSON.parse(analysisJson) as JobAnalysis;
   const language = analysis.language || "English";
 
-  // --- Cover letter: single document, unchanged behavior. ---
+  // Reserve the restrained "executive" layout for genuine people-leadership;
+  // everyone else gets the polished "modern" look (shared with the resume).
+  const seniorRole = /(director|chief|c-level|\bvp\b|vice president|head of)/i.test(
+    `${analysis.seniority ?? ""} ${analysis.title ?? ""}`
+  );
+
+  // --- Cover letter: single tailored document. ---
   if (kind === "cover_letter") {
     const built = coverLetterPrompt(profileJson, analysisJson, language);
     const { text, model } = await run(ownerId, built.system, built.prompt, true, 4000);
     const content = parseJson<CoverLetterDoc>(text);
-    const template = selectTemplate({
-      market: analysis.market,
-      seniority: analysis.seniority,
-      title: analysis.title,
-      includePhoto: false,
-      hasPhotoFile: !!profile.photoPath,
-    });
+    // Identity, contacts and date are DATA — set them deterministically. The
+    // model kept inventing a wrong date (e.g. "24 October 2023") and reshaping
+    // contacts; pin them to the profile and today.
+    const fullName = profileFullName(profile);
+    if (fullName) {
+      content.fullName = fullName;
+      content.signature = fullName;
+    }
+    content.contacts = profileContacts(profile);
+    content.date = formatLetterDate(language);
+    const template: TemplateId = seniorRole ? "executive" : "modern";
     const prior = await prisma.generation.count({ where: { jobId, kind } });
     const gen = await prisma.generation.create({
       data: {
@@ -143,29 +159,51 @@ export async function generate(
     return { generations: [gen], contents: [content] };
   }
 
-  // --- Resume: 2 distinct versions from ONE AI call. ---
-  const built = resumePrompt(profileJson, analysisJson, format, language, RESUME_VERSIONS);
+  // --- Resume: ONE best-possible tailored resume, rendered as EXACTLY two
+  // versions of the SAME content — v1 photo-free (maximally ATS-safe), v2 with
+  // a photo — so both are equally strong and differ only by presentation.
+  // A photo doesn't change the text, so the content is generated once. ---
+  const built = resumePrompt(profileJson, analysisJson, format, language, 1);
+  // Generous headroom: reasoning models consume budget before emitting JSON.
   const { text, model } = await run(ownerId, built.system, built.prompt, true, 16000);
   const parsed = parseJson<{ versions?: ResumeDoc[] } & ResumeDoc>(text);
-  // Tolerate models that ignore the wrapper and return a single resume object.
-  const versions = (Array.isArray(parsed.versions) && parsed.versions.length
-    ? parsed.versions
-    : [parsed as ResumeDoc]
-  ).slice(0, RESUME_VERSIONS);
+  // Tolerate a model that wraps the single resume in { versions: [...] }.
+  const base = Array.isArray(parsed.versions) && parsed.versions.length
+    ? parsed.versions[0]
+    : (parsed as ResumeDoc);
 
-  // Design skill: auto-select two distinct templates from market/role/photo signals.
-  const pair = selectTemplatePair({
-    market: analysis.market,
-    seniority: analysis.seniority,
-    title: analysis.title,
-    includePhoto: versions.some((v) => v.includePhoto),
-    hasPhotoFile: !!profile.photoPath,
-  });
+  // Anti-fabrication guard: strip any hallucinated employers/institutions
+  // before they reach the stored document / PDF.
+  const { resume: clean, removed } = validateResumeAgainstProfile(base, profile);
+  if (removed.length) console.warn(`[resumee] dropped fabricated entries for job ${jobId}:`, removed);
 
-  // Versions continue the existing numbering for this job + kind.
-  const prior = await prisma.generation.count({ where: { jobId, kind } });
+  const hasPhoto = !!profile.photoPath;
+
+  // v1 — no photo: the polished single-column "modern" layout by default (chips,
+  // accent headers — attractive AND fully ATS-safe); senior/leadership roles get
+  // the understated "executive" layout. Both are single-column, real-text, so a
+  // bot parses them cleanly. (The classic serif "ats" theme stays available as a
+  // manual choice for conservative fields.)
+  const noPhotoTpl: TemplateId = seniorRole ? "executive" : "modern";
+  // v2 — with photo: the photo layout when a photo exists; otherwise a distinct
+  // strong layout so the user still gets two useful, different versions.
+  const photoTpl: TemplateId = hasPhoto
+    ? "photo"
+    : noPhotoTpl === "executive"
+      ? "modern"
+      : "executive";
+
+  // Only the layout and the photo flag differ between the two versions.
+  const variants: Array<{ template: TemplateId; content: ResumeDoc }> = [
+    { template: noPhotoTpl, content: { ...clean, includePhoto: false } },
+    { template: photoTpl, content: { ...clean, includePhoto: hasPhoto } },
+  ];
+
+  // Replace prior resume versions for this job so there are always EXACTLY two,
+  // numbered 1 (no photo) and 2 (photo). Regenerating refreshes both.
+  await prisma.generation.deleteMany({ where: { jobId, ownerId, kind: "resume" } });
   const generations = [];
-  for (let i = 0; i < versions.length; i++) {
+  for (let i = 0; i < variants.length; i++) {
     generations.push(
       await prisma.generation.create({
         data: {
@@ -174,15 +212,36 @@ export async function generate(
           kind,
           language,
           format,
-          template: pair[i] ?? pair[0],
+          template: variants[i].template,
           model,
-          content: JSON.stringify(versions[i]),
-          version: prior + i + 1,
+          content: JSON.stringify(variants[i].content),
+          version: i + 1,
         },
       })
     );
   }
-  return { generations, contents: versions };
+  return { generations, contents: variants.map((v) => v.content) };
+}
+
+// Today's date formatted for a letter, localized to the vacancy's language
+// where we can map it. Deterministic — never left to the model.
+function formatLetterDate(language?: string): string {
+  const localeMap: Record<string, string> = {
+    english: "en-GB",
+    german: "de-DE",
+    french: "fr-FR",
+    spanish: "es-ES",
+    italian: "it-IT",
+    russian: "ru-RU",
+    portuguese: "pt-PT",
+    dutch: "nl-NL",
+  };
+  const locale = localeMap[(language ?? "").trim().toLowerCase()] ?? "en-GB";
+  try {
+    return new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", year: "numeric" }).format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
 }
 
 function clampScore(n: unknown): number {

@@ -46,7 +46,7 @@ export function GenerationStudio({ jobId, generations }: { jobId: string; genera
             </Field>
           </div>
           <Button variant="accent" onClick={() => gen("resume")} disabled={!!busy}>
-            {busy === "resume" ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />} Generate resume (2 versions)
+            {busy === "resume" ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />} Generate resume (no-photo + photo)
           </Button>
           <Button variant="outline" onClick={() => gen("cover_letter")} disabled={!!busy}>
             {busy === "cover_letter" ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />} Generate cover letter
