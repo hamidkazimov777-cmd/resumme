@@ -5,6 +5,7 @@ import { getSessionUser } from "@/server/auth";
 import { Card, CardContent, CardHeader, CardTitle, Badge, Progress } from "@/components/ui/primitives";
 import { GenerationStudio } from "@/components/generation-studio";
 import type { JobAnalysis } from "@/lib/types";
+import { DeleteJobButton } from "@/components/delete-job-button";
 import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +33,12 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
 
   return (
     <div className="flex flex-col gap-8">
-      <Link href="/analyzer" className="flex items-center gap-1 text-sm text-muted hover:text-foreground"><ArrowLeft className="size-4" /> Back</Link>
+      <div className="flex items-center justify-between">
+        <Link href="/analyzer" className="flex items-center gap-1 text-sm text-muted hover:text-foreground">
+          <ArrowLeft className="size-4" /> Back to Analyzer
+        </Link>
+        <DeleteJobButton jobId={job.id} jobTitle={job.title ?? undefined} />
+      </div>
 
       <header className="flex items-start justify-between">
         <div>
@@ -53,7 +59,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
           <Progress value={score} />
-          <div className="grid grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <List title="Strong matches" items={a.strong} variant="success" />
             <List title="Weak matches" items={a.weak} variant="warning" />
             <List title="Gaps" items={a.gaps} variant="danger" />
@@ -63,7 +69,7 @@ export default async function JobDetail({ params }: { params: Promise<{ id: stri
 
       <Card>
         <CardHeader><CardTitle>Requirements & ATS</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-2 gap-6">
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <List title="ATS keywords" items={a.keywords} />
           <List title="ATS requirements" items={a.atsRequirements} />
           <List title="Requirements" items={a.requirements} />

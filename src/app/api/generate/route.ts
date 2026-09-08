@@ -17,8 +17,11 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   const { jobId, kind, format } = parsed.data;
   try {
-    const { generation, content } = await generate(userId, jobId, kind, format);
-    return NextResponse.json({ generationId: generation.id, version: generation.version, content });
+    const { generations } = await generate(userId, jobId, kind, format);
+    return NextResponse.json({
+      generationIds: generations.map((g) => g.id),
+      versions: generations.map((g) => g.version),
+    });
   } catch (e) {
     if (e instanceof RateLimitError) {
       return NextResponse.json({ error: "Too many generations this hour. Try again later." }, { status: 429 });
