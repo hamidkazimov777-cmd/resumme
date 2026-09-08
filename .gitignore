@@ -20,3 +20,6 @@ out
 # local template preview renders
 /prev_new_*.png
 /preview-*.png
+
+# Next.js auto-generated (regenerated on build; not source)
+next-env.d.ts
