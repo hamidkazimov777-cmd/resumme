@@ -1,7 +1,20 @@
+import { randomBytes } from "crypto";
 import { prisma } from "@/lib/db";
 
 export const SESSION_COOKIE = "resumee_session";
 export const SESSION_TTL_DAYS = 30;
+
+// The session id is the bearer token that goes into the cookie, so it has to be
+// unguessable. Prisma's @default(cuid()) is not: a cuid is a timestamp, a
+// per-process counter and a host fingerprint plus only a few random characters,
+// so one valid token tells an attacker a lot about the others. 32 bytes from
+// the CSPRNG removes that. Existing cuid sessions keep working until they age
+// out, since only the way new ids are produced changes.
+const TOKEN_BYTES = 32;
+
+function newSessionToken(): string {
+  return randomBytes(TOKEN_BYTES).toString("base64url");
+}
 
 export interface SessionUser {
   id: string;
@@ -11,7 +24,9 @@ export interface SessionUser {
 
 export async function createSession(userId: string): Promise<{ token: string; expiresAt: Date }> {
   const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000);
-  const session = await prisma.session.create({ data: { userId, expiresAt } });
+  const session = await prisma.session.create({
+    data: { id: newSessionToken(), userId, expiresAt },
+  });
   return { token: session.id, expiresAt };
 }
 
