@@ -34,10 +34,29 @@ export default function ProfilePage() {
   const [form, setForm] = useState<Form | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [photoPath, setPhotoPath] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/profile").then((r) => r.json()).then((p) => {
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isDirty]);
+
+  useEffect(() => {
+    fetch("/api/profile").then((r) => {
+      if (r.status === 401) {
+        window.location.href = "/login";
+        return null;
+      }
+      return r.json();
+    }).then((p) => {
+      if (!p) return;
       setPhotoPath(p.photoPath ?? null);
       setForm({
         firstName: S(p.firstName), lastName: S(p.lastName), middleName: S(p.middleName),
@@ -70,7 +89,10 @@ export default function ProfilePage() {
     });
   }, []);
 
-  const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => (f ? { ...f, [k]: v } : f));
+  const set = <K extends keyof Form>(k: K, v: Form[K]) => {
+    setIsDirty(true);
+    setForm((f) => (f ? { ...f, [k]: v } : f));
+  };
 
   async function save() {
     if (!form) return;
@@ -83,7 +105,11 @@ export default function ProfilePage() {
     };
     const res = await fetch("/api/profile", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
     setSaving(false);
-    if (res.ok) { setSaved(true); setTimeout(() => setSaved(false), 2500); }
+    if (res.ok) {
+      setIsDirty(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    }
   }
 
   if (!form) {
@@ -105,7 +131,7 @@ export default function ProfilePage() {
       {/* Personal */}
       <Card>
         <CardHeader><CardTitle>Personal</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-3 gap-4">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           <Field label="First name"><Input value={form.firstName} onChange={(e) => set("firstName", e.target.value)} /></Field>
           <Field label="Last name"><Input value={form.lastName} onChange={(e) => set("lastName", e.target.value)} /></Field>
           <Field label="Middle name"><Input value={form.middleName} onChange={(e) => set("middleName", e.target.value)} /></Field>
@@ -127,7 +153,7 @@ export default function ProfilePage() {
       {/* Contacts */}
       <Card>
         <CardHeader><CardTitle>Contacts</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-2 gap-4">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="Email"><Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} /></Field>
           <Field label="Phone"><Input value={form.phone} onChange={(e) => set("phone", e.target.value)} /></Field>
           <Field label="Telegram"><Input value={form.telegram} onChange={(e) => set("telegram", e.target.value)} /></Field>
@@ -273,7 +299,7 @@ export default function ProfilePage() {
       <IntelligencePanel />
 
       {/* Sticky save bar */}
-      <div className="fixed bottom-0 left-60 right-0 border-t border-border bg-background/80 px-8 py-3 backdrop-blur">
+      <div className="fixed bottom-0 left-0 md:left-60 right-0 z-20 border-t border-border bg-background/90 px-4 md:px-8 py-3 backdrop-blur shadow-sm">
         <div className="mx-auto flex max-w-5xl items-center justify-end gap-3">
           {saved ? <span className="flex items-center gap-1 text-sm text-success"><Check className="size-4" /> Saved</span> : null}
           <Button onClick={save} disabled={saving} variant="accent">

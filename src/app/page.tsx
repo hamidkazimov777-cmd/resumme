@@ -20,9 +20,10 @@ export default async function Dashboard() {
   const profile = await getOrCreateProfile(user.id);
   const pct = completeness(profile);
 
-  const [resumeCount, coverCount, jobs] = await Promise.all([
+  const [resumeCount, coverCount, totalJobsCount, jobs] = await Promise.all([
     prisma.generation.count({ where: { ownerId: user.id, kind: "resume" } }),
     prisma.generation.count({ where: { ownerId: user.id, kind: "cover_letter" } }),
+    prisma.job.count({ where: { ownerId: user.id } }),
     prisma.job.findMany({
       where: { ownerId: user.id },
       orderBy: { createdAt: "desc" },
@@ -34,7 +35,7 @@ export default async function Dashboard() {
   const stats = [
     { label: "Resumes", value: resumeCount, icon: FileText },
     { label: "Cover Letters", value: coverCount, icon: Mail },
-    { label: "Jobs Analyzed", value: jobs.length, icon: Briefcase },
+    { label: "Jobs Analyzed", value: totalJobsCount, icon: Briefcase },
   ];
 
   return (
