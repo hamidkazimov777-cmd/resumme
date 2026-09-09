@@ -48,6 +48,18 @@ registerFonts();
 // spaces only, which reads far more like a human-written document.
 Font.registerHyphenationCallback((word) => [word]);
 
+// Human-friendly certification dates: turn an ISO date/month ("2025-05-01",
+// "2025-05") into "May 2025"; leave already-human values ("2025", "May 2025")
+// untouched. Robust to whatever the model emits and fixes stored generations.
+const CERT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function formatCertDate(s?: string): string {
+  if (!s) return "";
+  const m = s.trim().match(/^(\d{4})-(\d{2})(?:-\d{2})?$/);
+  if (!m) return s.trim();
+  const mon = CERT_MONTHS[parseInt(m[2], 10) - 1];
+  return mon ? `${mon} ${m[1]}` : m[1];
+}
+
 // ATS-friendly layout: single linear column, standard headings, real text,
 // simple bullets, no tables/graphics that break parsing. A "template" is a
 // THEME (palette + typeface + spacing + header layout) applied over this same
@@ -727,7 +739,7 @@ export function ResumePDF({
                 <Text style={{ color: theme.muted }}>– </Text>
                 {c.name}
                 {c.organization ? `, ${c.organization}` : ""}
-                {c.date ? ` (${c.date})` : ""}
+                {c.date ? ` (${formatCertDate(c.date)})` : ""}
                 {c.credentialId ? ` — ID: ${c.credentialId}` : ""}
               </Text>
             ))}
