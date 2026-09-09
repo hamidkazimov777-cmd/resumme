@@ -226,7 +226,7 @@ function makeStyles(theme: Theme, profile?: DensityProfile) {
 function contentWeight(doc: ResumeDoc): number {
   let w = 0;
   // Header: name + headline + contacts + photo
-  w += doc.includePhoto ? 7 : 5;
+  w += doc.includePhoto ? 11 : 5; // a photo consumes real vertical space → weigh it heavier so the photo version compresses enough to stay on one page
   if (doc.summary) {
     w += Math.ceil(doc.summary.length / 70) + 2; // summary text (wraps at ~70 chars) + section title
   }
@@ -367,7 +367,7 @@ const DENSITY_PROFILES: DensityProfile[] = [
     headlineBottom: 3,
     trim: true,
   },
-  // Profile 4: very heavy content (> 75 lines) -> maximum compression
+  // Profile 4: very heavy content -> strong compression
   {
     scale: 0.78,
     leading: 0.82,
@@ -379,6 +379,21 @@ const DENSITY_PROFILES: DensityProfile[] = [
     photoWidth: 44,
     photoHeight: 54,
     headlineBottom: 2.5,
+    trim: true,
+  },
+  // Profile 5: maximum compression -> last resort before trimming, keeps a
+  // very full (photo + 3 roles + many projects) resume on a single page.
+  {
+    scale: 0.74,
+    leading: 0.8,
+    sectionGap: 3.8,
+    itemGap: 2.2,
+    paddingTop: 12,
+    paddingBottom: 11,
+    bulletGap: 0.9,
+    photoWidth: 42,
+    photoHeight: 52,
+    headlineBottom: 2.2,
     trim: true,
   },
 ];
@@ -395,10 +410,12 @@ function pickDensity(theme: Theme, doc: ResumeDoc, format: "A4" | "Letter"): { t
     profile = DENSITY_PROFILES[1]; // scale=0.94
   } else if (weight <= 62) {
     profile = DENSITY_PROFILES[2]; // scale=0.88
-  } else if (weight <= 75) {
+  } else if (weight <= 73) {
     profile = DENSITY_PROFILES[3]; // scale=0.83
-  } else {
+  } else if (weight <= 85) {
     profile = DENSITY_PROFILES[4]; // scale=0.78
+  } else {
+    profile = DENSITY_PROFILES[5]; // scale=0.74
   }
 
   const scaledTheme: Theme = {
@@ -419,8 +436,36 @@ function pickDensity(theme: Theme, doc: ResumeDoc, format: "A4" | "Letter"): { t
 
 // Preserve 100% of user data: layout density scaling handles visual fit,
 // without silently dropping the candidate's real accomplishments, certifications or projects.
-function trimDoc(doc: ResumeDoc, _profile: DensityProfile): ResumeDoc {
-  return doc;
+// Hard one-page guarantee. pickDensity already shrank the type as far as it
+// will go; if the content STILL overflows at that scale, trim the lowest-value
+// material — trailing experience bullets first (keeps every role and project,
+// so strong projects like a 4th one survive), then surplus projects/education
+// only as a last resort. Estimation-based (react-pdf can't measure height), so
+// a small safety margin is applied.
+function trimDoc(doc: ResumeDoc, theme: Theme, format: "A4" | "Letter"): ResumeDoc {
+  const capacity = maxLinesForPage(theme, format) - 1; // margin
+  const d: ResumeDoc = JSON.parse(JSON.stringify(doc));
+  const over = () => contentWeight(d) > capacity;
+
+  // 1) trim trailing experience bullets down to a floor of 5 total
+  const MIN_BULLETS = 5;
+  while (over()) {
+    const total = (d.experience ?? []).reduce((n, e) => n + (e.bullets?.length ?? 0), 0);
+    if (total <= MIN_BULLETS) break;
+    let trimmed = false;
+    for (let i = (d.experience?.length ?? 0) - 1; i >= 0; i--) {
+      if ((d.experience[i].bullets?.length ?? 0) > 1) { d.experience[i].bullets.pop(); trimmed = true; break; }
+    }
+    if (!trimmed) break;
+  }
+  // 2) drop projects beyond 3
+  while (over() && (d.projects?.length ?? 0) > 3) d.projects.pop();
+  // 3) drop education beyond 2
+  while (over() && (d.education?.length ?? 0) > 2) d.education.pop();
+  // 4) last resort: drop remaining surplus projects down to 2
+  while (over() && (d.projects?.length ?? 0) > 2) d.projects.pop();
+
+  return d;
 }
 
 function cleanContact(v: string): string {
@@ -610,7 +655,7 @@ export function ResumePDF({
 }) {
   const baseTheme = getTheme(template);
   const { theme, profile } = pickDensity(baseTheme, doc, format);
-  const trimmedDoc = trimDoc(doc, profile);
+  const trimmedDoc = trimDoc(doc, theme, format);
   const s = makeStyles(theme, profile);
   const layout = layoutFor(theme);
   // Colored themes (modern/photo/creative) get the polished, reference-style
