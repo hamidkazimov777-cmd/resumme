@@ -140,16 +140,14 @@ ${outputSpec}
 
 Mirror job keywords the candidate genuinely has. Quantify achievements. Use ONLY profile facts — never invent employers, titles, dates, degrees, or metrics.
 
-CRITICAL LENGTH CONSTRAINT — EACH version must fit onto EXACTLY ONE single page (${format}):
-- Summary: 2 tight, high-impact sentences MAX (~35-40 words total). No buzzwords or fluff.
-- Experience roles: Include only the 2-3 most relevant positions.
-- Experience bullets: Total bullets across ALL positions combined must be 5 to 6 bullets MAXIMUM (e.g. 3 for the top role, 2 for the second, 1 for the third). Never generate more than 6 bullets total across the entire document.
-- Bullet brevity: Each bullet MUST be a single punchy line (10-14 words max). Lead with an active verb and a metric. Never write multi-sentence bullets or narrative paragraphs.
-- Projects: Include at most 2-3 most relevant projects. Project descriptions must be strictly 1 concise line (under 14 words).
-- Skills: Group tightly into 3-4 categories max.
-- Education: Max 2 entries.
-- Certifications: Max 2 entries.
-- Avoid unnecessary length. Every word must count. The entire document must comfortably fit on 1 page without overflowing.
+LENGTH — fill EXACTLY ONE FULL page (${format}). Use the whole page: a strong one-pager is dense and complete, NOT a sparse half-page with white space at the bottom. But NEVER overflow onto a second page.
+- Summary: 2-3 punchy, high-impact sentences. No buzzwords or fluff.
+- Experience: include the most relevant positions (up to 3-4). Give each role 2-4 achievement bullets, weighted toward the most relevant roles; aim for ~8-10 bullets total across the whole document.
+- Bullet brevity: each bullet is a single line (≤16 words), led by an active verb and, wherever possible, a metric. No multi-sentence bullets or paragraphs.
+- Projects: include the 3-5 most relevant projects, one concise line each (≤14 words). Don't drop strong, relevant projects just to save space.
+- Skills: 3-5 tight categories.
+- Education: up to 3 entries. Certifications: up to 3 entries.
+- Balancing rule: when the candidate has plenty of relevant material, INCLUDE MORE of it to fill the page rather than leaving it half-empty; when they have little, stay honest and concise instead of padding. Every line must earn its place — surface real, relevant content, never filler.
 
 CANDIDATE PROFILE (JSON):
 ${profileJson}
