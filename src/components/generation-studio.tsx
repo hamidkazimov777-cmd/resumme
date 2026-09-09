@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, Select, Field, Badge } from "@/components/ui/primitives";
 import { Button } from "@/components/ui/button";
 import { PAGE_FORMATS } from "@/lib/constants";
-import { TEMPLATE_LIST, getTheme } from "@/lib/design/templates";
 import { Loader2, FileText, Mail, Download, ExternalLink } from "lucide-react";
 
 type Gen = { id: string; kind: string; version: number; format: string; template?: string | null; createdAt: string };
@@ -79,22 +78,13 @@ function GenList({ title, items, onRefresh }: { title: string; items: Gen[]; onR
 }
 
 function GenRow({ g, onRefresh }: { g: Gen; onRefresh: () => void }) {
-  // Template switching is pure layout — re-renders the same content, no AI call.
-  // We offer all design templates and persist the user's choice to the database.
-  const stored = getTheme(g.template).id;
-  const [tpl, setTpl] = useState(stored);
   const [deleting, setDeleting] = useState(false);
   const isResume = g.kind === "resume";
-  const href = `/api/pdf/${g.id}?template=${tpl}`;
-
-  async function pickTemplate(newTpl: string) {
-    setTpl(newTpl as any);
-    await fetch(`/api/generations/${g.id}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ template: newTpl }),
-    }).catch(() => {});
-  }
+  // Each resume version is one fixed variation of the same content: v1 has no
+  // photo (ATS-safe), v2 includes the photo. The PDF uses the version's own
+  // stored template — no theme switcher, so there's no "which of 4?" confusion.
+  const withPhoto = g.template === "photo";
+  const href = `/api/pdf/${g.id}?template=${g.template ?? ""}`;
 
   async function deleteGen() {
     if (!confirm(`Delete ${g.kind === "resume" ? "Resume" : "Cover letter"} v${g.version}?`)) return;
@@ -105,47 +95,31 @@ function GenRow({ g, onRefresh }: { g: Gen; onRefresh: () => void }) {
   }
 
   return (
-    <li className="flex flex-col gap-2 rounded-md border border-border bg-surface px-3 py-2.5">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">v{g.version} · {g.format} · {new Date(g.createdAt).toLocaleDateString()}</span>
-        <div className="flex items-center gap-1">
-          <Button asChild size="sm" variant="ghost" title="Preview PDF">
-            <a href={href} target="_blank" rel="noreferrer"><ExternalLink className="size-4" /></a>
-          </Button>
-          <Button asChild size="sm" variant="ghost" title="Download PDF">
-            <a href={href} download><Download className="size-4" /></a>
-          </Button>
-          <button
-            type="button"
-            onClick={deleteGen}
-            disabled={deleting}
-            title="Delete version"
-            className="rounded p-1 text-muted transition-colors hover:text-danger disabled:opacity-50"
-          >
-            {deleting ? <Loader2 className="size-3.5 animate-spin" /> : <span className="text-xs">✕</span>}
-          </button>
-        </div>
+    <li className="flex items-center justify-between rounded-md border border-border bg-surface px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium">v{g.version}</span>
+        {isResume ? (
+          <Badge variant={withPhoto ? "muted" : "success"}>{withPhoto ? "With photo" : "No photo"}</Badge>
+        ) : null}
+        <span className="text-xs text-muted">{g.format} · {new Date(g.createdAt).toLocaleDateString()}</span>
       </div>
-      {isResume ? (
-        <div className="flex flex-wrap items-center gap-1 pt-1">
-          <span className="mr-1 text-xs text-muted">Theme:</span>
-          {TEMPLATE_LIST.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              title={t.description}
-              onClick={() => pickTemplate(t.id)}
-              className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
-                tpl === t.id
-                  ? "border-accent bg-accent text-white font-medium shadow-sm"
-                  : "border-border text-muted hover:text-foreground hover:bg-background"
-              }`}
-            >
-              {t.label}{t.id === g.template ? " · auto" : ""}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <div className="flex items-center gap-1">
+        <Button asChild size="sm" variant="ghost" title="Preview PDF">
+          <a href={href} target="_blank" rel="noreferrer"><ExternalLink className="size-4" /></a>
+        </Button>
+        <Button asChild size="sm" variant="ghost" title="Download PDF">
+          <a href={href} download><Download className="size-4" /></a>
+        </Button>
+        <button
+          type="button"
+          onClick={deleteGen}
+          disabled={deleting}
+          title="Delete version"
+          className="rounded p-1 text-muted transition-colors hover:text-danger disabled:opacity-50"
+        >
+          {deleting ? <Loader2 className="size-3.5 animate-spin" /> : <span className="text-xs">✕</span>}
+        </button>
+      </div>
     </li>
   );
 }
