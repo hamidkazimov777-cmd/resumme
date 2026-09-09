@@ -64,6 +64,17 @@ export function IntelligencePanel() {
             <List title="Key achievements" items={data.achievements} />
             <List title="Unique value" items={data.uniqueValue} />
             <List title="Career directions" items={data.directions} />
+            {data.jobSearchQueries?.length ? (
+              <div>
+                <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Job search keywords</h4>
+                <p className="mb-1.5 text-xs text-muted">Click a line to select it, then copy into LinkedIn / job boards.</p>
+                <ul className="flex flex-col gap-1">
+                  {data.jobSearchQueries.map((q, i) => (
+                    <li key={i} className="select-all rounded border border-border bg-surface px-2 py-1 font-mono text-xs">{q}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </>
         )}
       </CardContent>

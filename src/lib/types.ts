@@ -9,6 +9,7 @@ export interface IntelligenceData {
   achievements: string[];
   uniqueValue: string[];
   directions: string[]; // suggested career directions
+  jobSearchQueries?: string[]; // ready-to-paste search terms/titles for job boards
 }
 
 // Resume Quality Score — the six weighted dimensions from KB §4.1.

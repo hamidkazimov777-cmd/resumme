@@ -24,8 +24,11 @@ Return a JSON object with EXACTLY these keys:
   "industries": string[],
   "achievements": string[],         // most impressive, quantified where possible
   "uniqueValue": string[],          // unique selling points
-  "directions": string[]            // realistic next career directions
+  "directions": string[],           // realistic next career directions
+  "jobSearchQueries": string[]      // 8-12 ready-to-paste job-search queries
 }
+
+For "jobSearchQueries": terms the candidate can paste directly into LinkedIn / job boards to find matching roles, derived from their REAL skills and level. Mix (a) exact job titles to target (e.g. "AI Product Engineer", "Founding Engineer") and (b) a few boolean search strings (e.g. '"Founding Engineer" AND (AI OR LLM)'). Best fit first. Never reference skills the candidate lacks.
 
 Use ONLY facts present below. Do not invent.
 
