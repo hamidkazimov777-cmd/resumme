@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { verifyPassword, verifyPasswordDecoy } from "@/lib/auth/password";
 import { createSession } from "@/lib/auth/session";
 import { setSessionCookie } from "@/server/auth";
+import { readJsonBody } from "@/server/json";
 import { enforceRateLimit, RateLimitError } from "@/server/ratelimit";
 
 const schema = z.object({ email: z.string().email(), password: z.string().min(1) });
@@ -17,7 +18,7 @@ function clientAddress(req: NextRequest): string | null {
 }
 
 export async function POST(req: NextRequest) {
-  const parsed = schema.safeParse(await req.json());
+  const parsed = schema.safeParse(await readJsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: "Invalid input." }, { status: 400 });
   const email = parsed.data.email.toLowerCase().trim();
 

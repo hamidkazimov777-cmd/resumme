@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { hashPassword } from "@/lib/auth/password";
 import { createSession } from "@/lib/auth/session";
 import { setSessionCookie } from "@/server/auth";
+import { readJsonBody } from "@/server/json";
 
 const schema = z.object({
   email: z.string().email(),
@@ -12,7 +13,7 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const parsed = schema.safeParse(await req.json());
+  const parsed = schema.safeParse(await readJsonBody(req));
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input." }, { status: 400 });
   }

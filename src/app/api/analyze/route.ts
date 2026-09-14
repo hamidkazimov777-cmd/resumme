@@ -3,6 +3,7 @@ import { z } from "zod";
 import { analyzeJob } from "@/server/ai";
 import { fetchPublicText } from "@/server/safe-fetch";
 import { currentUserId, unauthorized } from "@/server/auth";
+import { readJsonBody } from "@/server/json";
 import { RateLimitError } from "@/server/ratelimit";
 
 const schema = z.object({
@@ -32,7 +33,7 @@ async function fetchJobText(url: string): Promise<string> {
 export async function POST(req: NextRequest) {
   const userId = await currentUserId();
   if (!userId) return unauthorized();
-  const parsed = schema.safeParse(await req.json());
+  const parsed = schema.safeParse(await readJsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   let { rawText } = parsed.data;
   const { sourceUrl } = parsed.data;

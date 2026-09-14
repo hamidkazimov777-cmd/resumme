@@ -5,6 +5,7 @@ import { PROVIDERS } from "@/lib/constants";
 import { listModels } from "@/lib/ai/client";
 import { decryptSecret } from "@/lib/crypto";
 import { currentUserId, unauthorized } from "@/server/auth";
+import { readJsonBody } from "@/server/json";
 
 const schema = z.object({
   provider: z.enum(["openrouter", "tokenrouter", "anthropic", "moonshot"]),
@@ -15,7 +16,7 @@ const schema = z.object({
 export async function POST(req: NextRequest) {
   const userId = await currentUserId();
   if (!userId) return unauthorized();
-  const parsed = schema.safeParse(await req.json());
+  const parsed = schema.safeParse(await readJsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: "Invalid request." }, { status: 400 });
   const { provider } = parsed.data;
   const baseUrl = PROVIDERS[provider].baseUrl;

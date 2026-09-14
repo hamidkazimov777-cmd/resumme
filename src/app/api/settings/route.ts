@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { PROVIDERS } from "@/lib/constants";
 import { encryptSecret, decryptSecret, maskSecret } from "@/lib/crypto";
 import { currentUserId, unauthorized } from "@/server/auth";
+import { readJsonBody } from "@/server/json";
 
 export async function GET() {
   const userId = await currentUserId();
@@ -34,7 +35,7 @@ const schema = z.object({
 export async function PUT(req: NextRequest) {
   const userId = await currentUserId();
   if (!userId) return unauthorized();
-  const parsed = schema.safeParse(await req.json());
+  const parsed = schema.safeParse(await readJsonBody(req));
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   const { provider, apiKey, model, isActive } = parsed.data;
   const baseUrl = PROVIDERS[provider].baseUrl;
