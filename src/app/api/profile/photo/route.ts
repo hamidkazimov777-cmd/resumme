@@ -8,6 +8,10 @@ import { currentUserId, unauthorized } from "@/server/auth";
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
+// What the bytes actually are, as reported by image-size. The declared MIME
+// type is whatever the client typed into the request, so it decides nothing on
+// its own: the extension we store and the format check both come from here.
+const ALLOWED_FORMATS: Record<string, string> = { jpg: "jpg", png: "png", webp: "webp" };
 // CV portrait guidance: 3x4 ≈ ratio 0.75. Accept a tolerant window.
 const MIN_RATIO = 0.6;
 const MAX_RATIO = 0.9;
@@ -29,7 +33,18 @@ export async function POST(req: NextRequest) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const dim = imageSize(buffer);
+  // imageSize throws on anything it cannot parse, and an upload is caller data,
+  // so a text file renamed to .png used to come back as a 500.
+  let dim;
+  try {
+    dim = imageSize(buffer);
+  } catch {
+    return NextResponse.json({ error: "That file is not a readable image." }, { status: 400 });
+  }
+  const format = dim.type ? ALLOWED_FORMATS[dim.type] : undefined;
+  if (!format) {
+    return NextResponse.json({ error: "Use JPEG, PNG or WebP." }, { status: 400 });
+  }
   const width = dim.width ?? 0;
   const height = dim.height ?? 0;
   if (!width || !height) {
@@ -48,7 +63,7 @@ export async function POST(req: NextRequest) {
   }
 
   const profile = await getOrCreateProfile(userId);
-  const ext = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+  const ext = format;
   const dir = path.join(process.cwd(), "public", "uploads");
   await mkdir(dir, { recursive: true });
   const filename = `photo-${profile.id}.${ext}`;
