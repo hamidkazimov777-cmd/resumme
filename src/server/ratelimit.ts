@@ -17,10 +17,33 @@ export const LIMITS: Record<string, { limit: number; windowMs: number }> = {
   intelligence: { limit: 20, windowMs: 60 * 60 * 1000 },
 };
 
+// Every row outside the current window is dead weight: the counter it holds can
+// never be read again, and nothing else deletes it, so the table only grows.
+// One sweep per process per interval keeps it flat without adding a scheduler
+// and without paying for a delete on every request.
+const MAX_WINDOW_MS = Math.max(...Object.values(LIMITS).map((c) => c.windowMs));
+const PRUNE_INTERVAL_MS = 60 * 60 * 1000;
+let lastPruneAt = 0;
+
 export class RateLimitError extends Error {
   constructor(public retryAfterSec: number) {
     super("Rate limit exceeded.");
     this.name = "RateLimitError";
+  }
+}
+
+// Drops rows whose window has fully elapsed, so a counter that is still being
+// read is never touched. Failure here must not fail the request it rides along
+// with: the limit itself has already been applied by the caller.
+async function pruneExpired(now: number): Promise<void> {
+  if (now - lastPruneAt < PRUNE_INTERVAL_MS) return;
+  lastPruneAt = now;
+  try {
+    await prisma.rateLimit.deleteMany({
+      where: { windowStart: { lt: new Date(now - MAX_WINDOW_MS) } },
+    });
+  } catch (e) {
+    console.error("rate limit prune failed, stale rows remain:", (e as Error).message);
   }
 }
 
@@ -41,4 +64,6 @@ export async function enforceRateLimit(key: string, action: keyof typeof LIMITS)
     const retryAfterSec = Math.ceil((windowStart.getTime() + cfg.windowMs - now) / 1000);
     throw new RateLimitError(retryAfterSec);
   }
+
+  await pruneExpired(now);
 }
